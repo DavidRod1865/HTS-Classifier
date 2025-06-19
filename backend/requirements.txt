@@ -4,7 +4,9 @@ flask-cors==4.0.0
 anthropic>=0.54.0
 pinecone==7.2.0
 pandas==2.2.3
-sentence-transformers==2.2.2
+
+# Lightweight embedding alternative
+# sentence-transformers==2.2.2  # Too large for Heroku (3GB)
 
 # Additional utilities
 python-dotenv==1.0.0
