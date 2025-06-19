@@ -8,7 +8,7 @@ import tailwindcss from "@tailwindcss/vite";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [tailwindcss(), react()],
   resolve: {
     alias: {
@@ -16,11 +16,12 @@ export default defineConfig({
     },
   },
   server: {
-    proxy: {
+    // Only use proxy in development when API_URL is not set
+    proxy: mode === 'development' ? {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:8080",
         changeOrigin: true,
       },
-    },
+    } : undefined,
   },
-});
+}));
