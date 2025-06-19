@@ -127,7 +127,7 @@ const App = () => {
 
   const handleExportPDF = async (resultsToExport) => {
     try {
-      exportToHTMLReport(resultsToExport, currentProduct);
+      exportToHTMLReport(resultsToExport, currentProduct, claudeAnalysis);
       console.log("PDF report exported successfully");
     } catch (error) {
       console.error("Error exporting PDF:", error);
