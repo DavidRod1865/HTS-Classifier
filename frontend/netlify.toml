@@ -12,10 +12,10 @@
   to = "/index.html"
   status = 200
 
-# API proxy for development (optional - you may not need this if using absolute URLs)
+# API proxy to Heroku backend
 [[redirects]]
   from = "/api/*"
-  to = "https://your-heroku-app.herokuapp.com/api/:splat"
+  to = "https://hts-oracle-backend.herokuapp.com/api/:splat"
   status = 200
   force = false
 
