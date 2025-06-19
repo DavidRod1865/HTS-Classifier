@@ -15,7 +15,7 @@
 # API proxy to Heroku backend
 [[redirects]]
   from = "/api/*"
-  to = "https://hts-oracle-backend.herokuapp.com/api/:splat"
+  to = "https://hts-oracle-backend-927ef284fb95.herokuapp.com/api/:splat"
   status = 200
   force = false
 
