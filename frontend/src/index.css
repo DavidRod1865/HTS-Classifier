@@ -204,6 +204,39 @@
   }
 }
 
+/* Mobile touch interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Enhanced mobile tap targets */
+@media (max-width: 768px) {
+  button, 
+  .btn,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"] {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Prevent double-tap zoom on buttons */
+  button {
+    touch-action: manipulation;
+  }
+  
+  /* Improve form controls on mobile */
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  /* Mobile-friendly hover states */
+  .hover\\:shadow-md:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+}
+
 /* Screen reader only content */
 .sr-only {
   position: absolute;
