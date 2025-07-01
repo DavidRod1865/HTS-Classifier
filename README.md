@@ -1,262 +1,372 @@
-# HTS Classification System
+# HTS Oracle - AI-Powered Harmonized Tariff Schedule Classifier
 
-A sophisticated, AI-powered system for classifying products under the Harmonized Tariff Schedule (HTS) codes using LangGraph workflows and Claude AI.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=white)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-4.9+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-## 🚀 Features
+> Professional-grade HTS classification system using AI and official USITC data to help importers, exporters, and customs professionals classify products accurately.
 
-- **Intelligent Product Classification**: Advanced AI-driven HTS code classification
-- **Conversational Interface**: Interactive clarifying questions for accurate results
-- **Multiple Search Strategies**: Exact match, fuzzy search, and semantic search
-- **High Confidence Scoring**: Confidence-based result filtering and presentation
-- **Turn-Limited Conversations**: Structured 3-turn conversation workflow
-- **RESTful API**: Complete Flask-based API with CORS support
-- **Modular Architecture**: Clean, maintainable codebase with separation of concerns
+## 🎯 **Overview**
 
-## 📁 Project Structure
+HTS Oracle is an enterprise-ready web application that leverages AI and official USITC Harmonized Tariff Schedule data to provide accurate product classifications with duty rates, regulatory requirements, and compliance guidance.
+
+### ✨ **Key Features**
+
+- **🤖 AI-Powered Classification**: Uses Claude AI with RAG (Retrieval-Augmented Generation) for intelligent product analysis
+- **📊 Official USITC Data**: Direct integration with official U.S. International Trade Commission HTS database
+- **📋 Professional Reports**: Export detailed classification reports with duty rates and compliance notes
+- **♿ Enterprise Accessibility**: WCAG-compliant interface with screen reader support
+- **📱 Responsive Design**: Optimized for desktop, tablet, and mobile devices
+- **🔍 Contextual Help**: Comprehensive guidance system for classification best practices
+- **⚡ Real-time Processing**: Fast, intelligent classification with confidence scoring
+
+## 🏗️ **Architecture**
 
 ```
-hts-classifier/
-├── src/                          # Core application modules
-│   ├── constants.py             # Configuration constants and mappings
-│   ├── config.py                # Configuration management
-│   ├── csv_hts_loader.py        # HTS data loading and management
-│   ├── search_engine.py         # Multi-strategy HTS search engine
-│   ├── question_generator.py    # AI-powered question generation
-│   ├── product_classifier.py    # Product classification logic
-│   ├── langgraph_hts_agent.py   # Main LangGraph workflow agent
-│   ├── basic_classifier.py      # Basic classification utilities
-│   ├── conversational_classifier.py # Conversational interfaces
-│   ├── hts_classifier.py        # Legacy classifier
-│   └── __init__.py
-├── data/                        # HTS data files
-│   └── hts_2025_revision_13.csv # HTS tariff data
-├── frontend/                    # React frontend application
-├── archive/                     # Archived/legacy files
-├── app.py                       # Flask API server
-├── requirements.txt             # Python dependencies
-└── README.md                    # Project documentation
+HTS Oracle
+├── 🎨 Frontend (React + TypeScript)
+│   ├── Modern UI with shadcn/ui components
+│   ├── Progressive disclosure design
+│   ├── Contextual help system
+│   └── Professional export capabilities
+│
+├── 🔧 Backend (Python + Flask)
+│   ├── Claude AI integration for analysis
+│   ├── Pinecone vector database for RAG
+│   ├── USITC HTS data processing
+│   └── RESTful API design
+│
+└── 📊 Data Layer
+    ├── Official USITC HTS Schedule (CSV)
+    ├── Vector embeddings for semantic search
+    └── Classification confidence scoring
 ```
 
-## 🛠️ Installation
+## 🚀 **Quick Start**
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd hts-classifier
-   ```
+### Prerequisites
 
-2. **Create virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\\Scripts\\activate
-   ```
+- **Python 3.8+** with pip
+- **Node.js 18+** with npm
+- **Anthropic API Key** (for Claude AI)
+- **Pinecone API Key** (for vector database)
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Set up environment variables**:
-   ```bash
-   export ANTHROPIC_API_KEY="your-anthropic-api-key"
-   export LOG_LEVEL="INFO"  # Optional
-   export FLASK_DEBUG="True"  # Optional, for development
-   ```
-
-## 🚀 Usage
-
-### API Server
-
-Start the Flask API server:
+### 1. Clone Repository
 
 ```bash
+git clone https://github.com/yourusername/hts-oracle.git
+cd hts-oracle
+```
+
+### 2. Backend Setup
+
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Start backend server
 python app.py
 ```
 
-The API will be available at `http://localhost:8000` with the following endpoints:
+The backend will start on `http://localhost:8000`
 
-- `POST /api/classify` - Classify products with conversation support
-- `POST /api/session/clear` - Clear conversation session
-- `GET /api/health` - Health check
-- `GET /api/capabilities` - Get API capabilities
+### 3. Frontend Setup
 
-### Direct Usage
+```bash
+cd frontend
 
-Use the agent directly in Python:
+# Install dependencies
+npm install
 
-```python
-from src.langgraph_hts_agent import LangGraphHTSAgent
+# Configure environment
+cp .env.example .env.development
+# Edit with your backend URL
 
-# Initialize the agent
-agent = LangGraphHTSAgent()
-if not agent.initialize():
-    print("Failed to initialize agent")
-    exit(1)
+# Start development server
+npm run dev
+```
 
+The frontend will start on `http://localhost:5173`
+
+### 4. Initialize HTS Database (Optional)
+
+To populate the Pinecone vector database with HTS data:
+
+```bash
+# POST request to setup endpoint
+curl -X POST http://localhost:8000/api/setup-index \
+  -H "Content-Type: application/json" \
+  -d '{"csv_path": "data/hts_2025_revision_13.csv"}'
+```
+
+## 📖 **Usage**
+
+### Basic Classification
+
+1. **Enter Product Description**: Type a detailed product description
+2. **Review Results**: Analyze suggested HTS codes with confidence scores
+3. **Verify Classification**: Check official USITC data and regulatory notes
+4. **Export Report**: Generate professional HTML reports for customs documentation
+
+### Example Queries
+
+```
+✅ Good: "100% cotton knitted t-shirts for men"
+✅ Good: "Stainless steel pipes for construction, 2-inch diameter"
+✅ Good: "LED light bulbs, 60-watt equivalent, household use"
+
+❌ Avoid: "Nike shirts" (brand names)
+❌ Avoid: "Machine parts" (too vague)
+❌ Avoid: "Stuff from China" (not descriptive)
+```
+
+### API Usage
+
+```bash
 # Classify a product
-result = agent.classify_commodity("rubber tires for trucks")
+curl -X POST http://localhost:8000/api/classify \
+  -H "Content-Type: application/json" \
+  -d '{"query": "cotton t-shirts from China"}'
 
-if result["success"]:
-    state = result["result"]
-    print(f"Classification: {state.get('final_classification')}")
-else:
-    print(f"Error: {result['error']}")
+# Health check
+curl http://localhost:8000/api/health
 ```
 
-### API Usage Examples
+## 🛠️ **Development**
 
-**Basic Classification**:
-```bash
-curl -X POST http://localhost:8000/api/classify \\
-  -H "Content-Type: application/json" \\
-  -d '{"query": "laptop computer", "session_id": "test-session"}'
+### Project Structure
+
+```
+hts-classifier/
+├── backend/                 # Python Flask API
+│   ├── app.py              # Main Flask application
+│   ├── src/                # Core modules
+│   │   └── commodity_rag_search.py
+│   ├── requirements.txt    # Python dependencies
+│   └── README.md          # Backend documentation
+│
+├── frontend/               # React TypeScript app
+│   ├── src/
+│   │   ├── components/    # Reusable components
+│   │   │   ├── layout/   # Header, Layout components
+│   │   │   ├── search/   # Search form components
+│   │   │   ├── results/  # Results display components
+│   │   │   └── shared/   # Shared utilities
+│   │   ├── utils/        # Helper functions
+│   │   └── styles/       # CSS and styling
+│   ├── package.json      # Node.js dependencies
+│   └── README.md         # Frontend documentation
+│
+├── data/                  # HTS data files
+│   └── hts_2025_revision_13.csv
+│
+├── tests/                 # End-to-end tests
+│   ├── accessibility.spec.js
+│   ├── basic.spec.js
+│   └── e2e-classification.spec.js
+│
+└── docs/                  # Documentation
+    └── implementation/    # Technical guides
 ```
 
-**Continue Conversation**:
-```bash
-curl -X POST http://localhost:8000/api/classify \\
-  -H "Content-Type: application/json" \\
-  -d '{"query": "It is made of aluminum", "session_id": "test-session"}'
-```
-
-## 🏗️ Architecture
-
-### Core Components
-
-1. **LangGraph Agent** (`langgraph_hts_agent.py`):
-   - Main workflow orchestrator using LangGraph
-   - Manages conversation state and decision flow
-   - Coordinates between all other components
-
-2. **Search Engine** (`search_engine.py`):
-   - Multi-strategy search implementation
-   - Exact match, fuzzy search, and semantic search
-   - Relevance scoring and result filtering
-
-3. **Question Generator** (`question_generator.py`):
-   - AI-powered clarifying question generation
-   - Context-aware questions based on search results
-   - Turn-based conversation management
-
-4. **Product Classifier** (`product_classifier.py`):
-   - Product confirmation and understanding
-   - Final classification result formatting
-   - Option selection and validation
-
-5. **Configuration Management** (`config.py`, `constants.py`):
-   - Centralized configuration and constants
-   - Environment-based configuration
-   - Validation and reporting
-
-### Workflow
-
-1. **Product Confirmation**: Claude AI confirms understanding of the product
-2. **Hierarchy Search**: Multi-strategy search for matching HTS codes
-3. **Decision Logic**: Based on results, either ask questions or classify
-4. **Clarifying Questions**: Up to 3 turns of intelligent questions
-5. **Final Classification**: Present high-confidence results or top options
-6. **User Selection**: Handle user selection from multiple options
-
-## 🔧 Configuration
-
-### Environment Variables
-
-- `ANTHROPIC_API_KEY`: Required. Your Anthropic API key
-- `LOG_LEVEL`: Optional. Logging level (DEBUG, INFO, WARNING, ERROR)
-- `FLASK_DEBUG`: Optional. Enable Flask debug mode
-
-### Configuration Files
-
-- `src/constants.py`: All configuration constants and mappings
-- `src/config.py`: Configuration management and validation
-
-## 🧪 Testing
-
-Run the test suite:
+### Running Tests
 
 ```bash
-# Install test dependencies
-pip install pytest pytest-cov
+# Frontend tests
+cd frontend
+npm run test
 
-# Run tests
-pytest
+# E2E tests with Playwright
+npm run test:e2e
 
-# Run tests with coverage
-pytest --cov=src
+# Accessibility tests
+npm run test:accessibility
 ```
 
-Test the agent directly:
+### Development Commands
 
 ```bash
-cd src
-python langgraph_hts_agent.py
+# Backend development
+cd backend
+python app.py  # Development server with auto-reload
+
+# Frontend development
+cd frontend
+npm run dev    # Vite development server
+npm run build  # Production build
+npm run preview  # Preview production build
 ```
 
-## 📊 Features in Detail
+## 🔧 **Configuration**
 
-### Search Strategies
+### Backend Environment Variables
 
-1. **Exact Text Search**: Direct text matching in HTS descriptions
-2. **Fuzzy Search**: Similarity-based matching with configurable thresholds
-3. **Semantic Search**: Context-aware search using product keywords
-4. **Chapter-Targeted Search**: Product-specific chapter focusing
+```bash
+# Required
+ANTHROPIC_API_KEY=your_claude_api_key
+PINECONE_API_KEY=your_pinecone_api_key
 
-### Confidence Scoring
+# Optional
+FLASK_ENV=development
+PORT=8000
+PINECONE_INDEX_NAME=commodity-hts-codes
+PINECONE_DIMENSION=50
+```
 
-- **High Confidence** (≥85%): Direct classification or option presentation
-- **Medium Confidence** (70-84%): Clarifying questions to improve accuracy
-- **Low Confidence** (<70%): Additional questions or fallback options
+### Frontend Environment Variables
 
-### Conversation Management
+```bash
+# Development
+VITE_API_URL=http://localhost:8000
 
-- **Turn Limits**: Maximum 3 clarifying questions per session
-- **Context Preservation**: Maintains conversation history
-- **Session Management**: Multi-session support with state isolation
+# Production
+VITE_API_URL=https://your-api-domain.com
+```
 
-## 🔄 API Response Types
+## 📊 **API Reference**
 
-- `clarifying_questions`: Questions to gather more information
-- `final_classification`: Single classification result
-- `multiple_options`: Multiple options for user selection
-- `high_confidence_results`: High-confidence matches
-- `low_confidence_results`: Lower confidence potential matches
-- `no_results`: No suitable matches found
+### Endpoints
 
-## 📈 Performance Optimizations
+#### `POST /api/classify`
+Classify a product and return HTS codes with duty information.
 
-- **Modular Architecture**: Separation of concerns for maintainability
-- **Efficient Search**: Multi-strategy search with early termination
-- **Caching**: Search result caching (in search engine)
-- **Lazy Loading**: Components initialized only when needed
-- **Memory Management**: Efficient pandas operations
+**Request:**
+```json
+{
+  "query": "cotton t-shirts from China"
+}
+```
 
-## 🤝 Contributing
+**Response:**
+```json
+{
+  "success": true,
+  "type": "final_classification",
+  "message": "Found 3 HTS classifications from USITC HTS schedule",
+  "data": {
+    "results": [{
+      "hts_code": "6109.10.0000",
+      "description": "T-shirts, singlets and other vests, knitted or crocheted, of cotton",
+      "effective_duty": "16.5%",
+      "confidence_score": 95,
+      "match_type": "csv_lookup",
+      "duty_source": "usitc"
+    }],
+    "claude_analysis": "Detailed analysis text...",
+    "interpretation": {...}
+  }
+}
+```
+
+#### `GET /api/health`
+Health check endpoint.
+
+#### `POST /api/setup-index`
+Initialize and populate the Pinecone vector database.
+
+## 🎨 **Design System**
+
+### Typography Scale
+- **H1**: 36px (Main titles)
+- **H2**: 30px (Section headers)
+- **H3**: 24px (Card titles)
+- **Body**: 16px (Content)
+- **Small**: 14px (Metadata)
+
+### Color Palette
+- **Primary**: Blue 600 (#2563eb)
+- **Success**: Green 600 (#16a34a)
+- **Warning**: Amber 500 (#f59e0b)
+- **Error**: Red 600 (#dc2626)
+- **Neutral**: Gray scale
+
+### Spacing System
+- **XS**: 8px, **SM**: 12px, **MD**: 16px
+- **LG**: 24px, **XL**: 32px, **2XL**: 48px
+
+## ♿ **Accessibility**
+
+HTS Oracle is built with accessibility as a priority:
+
+- **WCAG 2.1 AA compliant**
+- **Keyboard navigation** for all features
+- **Screen reader support** with proper ARIA labels
+- **Focus management** and visual indicators
+- **High contrast mode** compatibility
+- **Reduced motion** support
+
+## 📱 **Browser Support**
+
+- **Chrome** 90+
+- **Firefox** 88+
+- **Safari** 14+
+- **Edge** 90+
+
+## 🔒 **Security**
+
+- **API key protection** with environment variables
+- **CORS configuration** for cross-origin requests
+- **Input validation** and sanitization
+- **No sensitive data logging**
+
+## 📈 **Performance**
+
+- **Code splitting** for optimal loading
+- **Lazy loading** of components
+- **Optimized bundle size**
+- **Responsive images**
+- **Caching strategies**
+
+## 🤝 **Contributing**
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 📝 License
+### Development Guidelines
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+- Follow TypeScript best practices
+- Write tests for new features
+- Ensure accessibility compliance
+- Update documentation
+- Follow the established code style
 
-## 🆘 Support
+## 📄 **License**
 
-For support and questions:
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-1. Check the configuration with `config.validate_and_report()`
-2. Review logs for error details
-3. Ensure all dependencies are properly installed
-4. Verify your Anthropic API key is valid
+## 🙏 **Acknowledgments**
 
-## 🔮 Future Enhancements
+- **USITC** for providing official HTS schedule data
+- **Anthropic** for Claude AI capabilities
+- **Pinecone** for vector database infrastructure
+- **shadcn/ui** for the beautiful component system
 
-- [ ] Embeddings-based semantic search
-- [ ] Machine learning model integration
-- [ ] Advanced caching strategies
-- [ ] Performance monitoring and analytics
-- [ ] Additional data sources integration
-- [ ] Batch processing capabilities
+## 📞 **Support**
+
+For support, please:
+
+1. Check the [Documentation](./docs/)
+2. Search existing [Issues](https://github.com/yourusername/hts-oracle/issues)
+3. Create a new issue with detailed information
+
+## ⚠️ **Disclaimer**
+
+HTS Oracle provides classifications for reference purposes only. Final HTS classifications should be verified with licensed customs brokers or through official CBP ruling procedures. Duty rates and regulations are subject to change.
+
+---
+
+**Built with ❤️ for the international trade community**
