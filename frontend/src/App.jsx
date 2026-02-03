@@ -1,224 +1,120 @@
-import React, { useState } from "react";
-
-// API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-// Utility function to format HTS codes for USITC links
-const formatHtsCodeForUSITC = (htsCode) => {
-  if (!htsCode) return htsCode;
-  
-  // Remove trailing "00" if present
-  if (htsCode.endsWith('00')) {
-    return htsCode.slice(0, -2);
-  }
-  
-  return htsCode;
-};
-
-// Layout Components
+import React, { useState, useRef, useEffect } from "react";
 import MainLayout from "@/components/layout/MainLayout";
+import ChatMessage from "@/components/chat/ChatMessage";
+import ChatInput from "@/components/chat/ChatInput";
 
-// Feature Components
-import SearchForm from "@/components/search/SearchForm";
-import ResultsContainer from "@/components/results/ResultsContainer";
-
-// Shared Components
-import { ProcessingLoadingState, ResultsLoadingSkeleton } from "@/components/shared/LoadingStates";
-import { WelcomeState, NoResultsState, ErrorState } from "@/components/shared/EmptyStates";
-import ContextualHelp from "@/components/shared/ContextualHelp";
-import { AccessibilityProvider } from "@/components/shared/AccessibilityProvider";
-
-// Utilities
-import { exportToHTMLReport } from "@/utils/pdfExport";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 const App = () => {
-  // Core state
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  
-  // Additional state
-  const [currentProduct, setCurrentProduct] = useState("");
-  const [claudeAnalysis, setClaudeAnalysis] = useState("");
-  const [searchCount, setSearchCount] = useState(0);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [error, setError] = useState(null);
+  const bottomRef = useRef(null);
 
-  // Debug: Log when component mounts
-  React.useEffect(() => {
-    console.log("HTSClassifier component mounted");
-  }, []);
+  // Auto-scroll to the latest message
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
-  const classifyProduct = async (e) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const sendMessage = async (text) => {
+    if (!text.trim() || loading) return;
 
+    // Optimistically add user message to the thread
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
-    setError("");
-    setCurrentProduct(query.trim());
-    setHasSearched(true);
-    
-    console.log("STARTING NEW CLASSIFICATION for:", query);
-    console.log("📡 Making API request to /api/classify (NEW)");
-    console.log("📡 Session ID:", `session_${Date.now()}`);
+    setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/classify`, {
+      const res = await fetch(`${API_BASE_URL}/api/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: query.trim(),
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, message: text }),
       });
 
-      console.log("📨 Response status:", response.status);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
 
-      if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
-      }
+      const data = await res.json();
 
-      const data = await response.json();
-      console.log("🔄 Full response data:", data);
+      // Persist session ID for follow-up turns
+      if (data.session_id) setSessionId(data.session_id);
 
-      if (data.success) {
-        if (data.type === "final_classification" && data.data?.results) {
-          setResults(data.data.results);
-          setClaudeAnalysis(data.data.claude_analysis || "");
-          setSearchCount(prev => prev + 1);
-          console.log("✅ SUCCESS: STARTING NEW classification completed");
-        } else if (data.type === "no_results") {
-          setResults([]);
-          setClaudeAnalysis(data.data?.claude_analysis || "");
-          console.log("⚠️ No results found");
-        } else {
-          console.log("🔄 Received data:", data);
-          setError("Unexpected response format from server");
-        }
-      } else {
-        setError(data.error || "Classification failed");
-        console.error("❌ API Error:", data.error);
-      }
+      // Add the assistant's response
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          type: data.type,          // "result" | "question"
+          results: data.results,
+          question: data.question,
+          analysis: data.analysis,
+        },
+      ]);
     } catch (err) {
-      console.error("❌ Network/Server Error:", err);
-      setError(`Network error: ${err.message}`);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNewSearch = () => {
-    setQuery("");
-    setResults([]);
-    setError("");
-    setCurrentProduct("");
-    setClaudeAnalysis("");
-    setHasSearched(false);
-  };
-
-  const handleRetry = () => {
-    if (currentProduct) {
-      setQuery(currentProduct);
-      classifyProduct({ preventDefault: () => {} });
-    }
-  };
-
-  const handleExportPDF = async (resultsToExport) => {
-    try {
-      exportToHTMLReport(resultsToExport, currentProduct, claudeAnalysis);
-      console.log("PDF report exported successfully");
-    } catch (error) {
-      console.error("Error exporting PDF:", error);
-      alert("Error exporting report. Please try again.");
-    }
-  };
-
-  const handleShowHistory = () => {
-    // TODO: Implement search history
-    console.log("Show search history");
-    alert("Search history feature coming soon!");
-  };
-
-  const handleShowHelp = () => {
-    setShowHelp(true);
-  };
-
-  // Render different states
-  const renderMainContent = () => {
-    // Loading state
-    if (loading) {
-      return <ProcessingLoadingState />;
-    }
-
-    // Error state
-    if (error) {
-      return (
-        <ErrorState 
-          error={error}
-          onRetry={handleRetry}
-          onNewSearch={handleNewSearch}
-        />
-      );
-    }
-
-    // Results state
-    if (results.length > 0) {
-      return (
-        <ResultsContainer
-          results={results}
-          currentProduct={currentProduct}
-          claudeAnalysis={claudeAnalysis}
-          onNewSearch={handleNewSearch}
-          onExportPDF={handleExportPDF}
-        />
-      );
-    }
-
-    // No results state (after search)
-    if (hasSearched && results.length === 0 && !loading) {
-      return (
-        <NoResultsState
-          query={currentProduct}
-          onRetry={handleRetry}
-          onNewSearch={handleNewSearch}
-        />
-      );
-    }
-
-    // Welcome state (initial)
-    return <WelcomeState />;
+  const newChat = () => {
+    setMessages([]);
+    setSessionId(null);
+    setError(null);
   };
 
   return (
-    <AccessibilityProvider>
-      <MainLayout
-        onShowHistory={handleShowHistory}
-        onShowHelp={handleShowHelp}
-        searchCount={searchCount}
-      >
-        <div className="space-y-8" id="main-content">
-          {/* Search Section - Always visible */}
-          <SearchForm
-            query={query}
-            setQuery={setQuery}
-            loading={loading}
-            onSubmit={classifyProduct}
-            showHints={!hasSearched} // Hide hints after first search
-          />
+    <MainLayout onNewChat={messages.length > 0 ? newChat : null}>
+      <div className="flex flex-col" style={{ height: "calc(100vh - 180px)" }}>
+        {/* Message thread */}
+        <div className="flex-1 overflow-y-auto space-y-4 pb-4 px-1">
+          {/* Empty state with example hints */}
+          {messages.length === 0 && (
+            <div className="text-center pt-16 px-4">
+              <p className="text-gray-500 text-base">Describe a commodity to classify</p>
+              <div className="flex flex-wrap justify-center gap-2 mt-4">
+                {["Cotton t-shirts", "Steel pipes", "LED light bulbs", "Rubber tires"].map(
+                  (hint) => (
+                    <button
+                      key={hint}
+                      onClick={() => sendMessage(hint)}
+                      className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full transition-colors"
+                    >
+                      {hint}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          )}
 
-          {/* Main Content Area */}
-          {renderMainContent()}
+          {/* Rendered messages */}
+          {messages.map((msg, i) => (
+            <ChatMessage key={i} message={msg} />
+          ))}
+
+          {/* Loading indicator */}
+          {loading && (
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+              Searching…
+            </div>
+          )}
+
+          {/* Error banner */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
+
+          <div ref={bottomRef} />
         </div>
-        
-        {/* Contextual Help Modal */}
-        <ContextualHelp 
-          isOpen={showHelp} 
-          onClose={() => setShowHelp(false)} 
-        />
-      </MainLayout>
-    </AccessibilityProvider>
+
+        {/* Input bar — always at the bottom */}
+        <ChatInput onSend={sendMessage} disabled={loading} />
+      </div>
+    </MainLayout>
   );
 };
 

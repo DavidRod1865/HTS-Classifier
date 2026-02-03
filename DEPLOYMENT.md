@@ -1,16 +1,17 @@
 # 🚀 Deployment Guide
 
-This guide covers deploying the HTS Oracle application with backend on Heroku and frontend on Netlify.
+This guide covers deploying the HTS Oracle application with a Flask backend on Heroku and a Vite frontend on Netlify.
 
 ## 📋 Prerequisites
 
-- [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli) installed
-- [Git](https://git-scm.com/) installed
+- [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli)
+- [Git](https://git-scm.com/)
 - [Netlify account](https://netlify.com)
 - [Heroku account](https://heroku.com)
 - API keys for:
-  - Anthropic (Claude AI)
-  - Pinecone (Vector Database)
+  - OpenAI (embeddings)
+  - Pinecone (vector database)
+  - Anthropic (Claude)
 
 ## 🔧 Backend Deployment (Heroku)
 
@@ -31,17 +32,18 @@ heroku buildpacks:set heroku/python -a hts-oracle-backend
 
 ```bash
 # Required API keys
-heroku config:set ANTHROPIC_API_KEY="your_anthropic_api_key" -a hts-oracle-backend
+heroku config:set OPENAI_API_KEY="your_openai_api_key" -a hts-oracle-backend
 heroku config:set PINECONE_API_KEY="your_pinecone_api_key" -a hts-oracle-backend
+heroku config:set ANTHROPIC_API_KEY="your_anthropic_api_key" -a hts-oracle-backend
 
 # Environment configuration
 heroku config:set FLASK_ENV="production" -a hts-oracle-backend
 heroku config:set NETLIFY_URL="https://hts-oracle.netlify.app" -a hts-oracle-backend
 heroku config:set FRONTEND_URL="https://hts-oracle.netlify.app" -a hts-oracle-backend
 
-# Pinecone configuration
-heroku config:set PINECONE_INDEX_NAME="commodity-hts-codes-new" -a hts-oracle-backend
-heroku config:set PINECONE_DIMENSION="1024" -a hts-oracle-backend
+# Optional model/index configuration
+heroku config:set PINECONE_INDEX_NAME="hts-codes" -a hts-oracle-backend
+heroku config:set CLAUDE_MODEL="claude-sonnet-4-5-20250929" -a hts-oracle-backend
 ```
 
 ### 3. Deploy Backend
@@ -136,17 +138,15 @@ Expected response:
 ```json
 {
   "status": "healthy",
-  "api_ready": true,
-  "version": "1.0.0",
   "environment": "production"
 }
 ```
 
 ### 2. Frontend Functionality Test
 - Visit your Netlify URL
-- Test a product classification
-- Verify PDF export works
-- Check console for any errors
+- Submit a product description
+- Verify clarifying questions appear when needed
+- Open result cards and check USITC links
 
 ### 3. CORS Verification
 - Open browser developer tools
@@ -162,11 +162,11 @@ Expected response:
 heroku logs --tail -a hts-oracle-backend
 ```
 - Check for missing environment variables
-- Verify Python version in `runtime.txt`
+- Verify Python version in `runtime.txt` (if present)
 - Check `requirements.txt` dependencies
 
 **CORS errors**
-- Verify `NETLIFY_URL` environment variable
+- Verify `NETLIFY_URL` / `FRONTEND_URL` environment variables
 - Check allowed origins in `app.py`
 
 **API key issues**
@@ -178,7 +178,7 @@ heroku logs --tail -a hts-oracle-backend
 **Build failures**
 - Check Node.js version (should be 18+)
 - Verify all dependencies in `package.json`
-- Check for TypeScript errors
+- Check for ESLint errors
 
 **API connection issues**
 - Verify `VITE_API_URL` environment variable
@@ -194,14 +194,10 @@ heroku logs --tail -a hts-oracle-backend
 
 # Check dyno status
 heroku ps -a hts-oracle-backend
-
-# View metrics
-heroku addons:open papertrail -a hts-oracle-backend
 ```
 
 ### Netlify Monitoring
 - Check build logs in Netlify dashboard
-- Monitor function logs (if using Netlify functions)
 - Review analytics in Netlify dashboard
 
 ## 🔄 Updates and Maintenance
@@ -244,14 +240,13 @@ heroku ps:type Standard-1X -a hts-oracle-backend
 
 ## 💰 Cost Optimization
 
-### Heroku Free Tier
-- Use Eco dynos ($5/month) for production
+### Heroku
+- Use Eco dynos for lower cost
 - Consider scaling down during off-hours
 
-### Netlify Free Tier
-- 100GB bandwidth per month
+### Netlify
+- 100GB bandwidth per month on free tier
 - 300 build minutes per month
-- Perfect for most use cases
 
 ## 🔒 Security Best Practices
 
@@ -263,11 +258,9 @@ heroku ps:type Standard-1X -a hts-oracle-backend
 2. **CORS Configuration**
    - Only allow necessary origins
    - Use HTTPS in production
-   - Review periodically
 
 3. **Dependencies**
    - Keep dependencies updated
-   - Use `npm audit` to check for vulnerabilities
    - Monitor security advisories
 
 ## 📞 Support
@@ -284,6 +277,6 @@ If you encounter issues:
 
 ---
 
-**Deployment URLs:**
+**Deployment URLs (example):**
 - **Backend**: https://hts-oracle-backend.herokuapp.com
 - **Frontend**: https://hts-oracle.netlify.app

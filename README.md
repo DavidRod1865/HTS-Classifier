@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=white)](https://reactjs.org/)
+[![React](https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 
 > AI-powered product classification system that reduces tariff code lookup time from 30+ minutes to under 2 minutes for international trade compliance.
 
@@ -23,96 +23,59 @@ The existing solutions were either:
 
 ### Why I Built This
 
-When Claude AI became available with strong reasoning capabilities, I saw an opportunity to solve this with AI-powered semantic search rather than traditional keyword matching. The $500B+ annual US import market meant even small improvements in classification speed and accuracy could have significant impact.
+When modern LLMs became available with strong reasoning capabilities, I saw an opportunity to solve this with AI-powered semantic search rather than traditional keyword matching. The $500B+ annual US import market meant even small improvements in classification speed and accuracy could have significant impact.
 
 I also had a personal connection - having worked in logistics, I knew small freight forwarders and customs brokers who couldn't afford enterprise solutions but desperately needed better tools.
 
 ### Product Strategy & Key Decisions
 
-**Decision 1: Confidence Scoring Over Pure Automation**
+**Decision 1: Confidence-Based Results, Not Blind Automation**
 
-Early user feedback revealed that trade specialists didn't want black-box automation - they needed to **trust** the AI's suggestions. I implemented a three-tier confidence system (high/medium/low) with reasoning for each classification. This design decision meant the product augmented human expertise rather than trying to replace it.
+Trade specialists want transparency. The system returns direct results only when vector search confidence is high; otherwise, it asks a clarifying question or presents multiple options. This preserves user control while still accelerating the workflow.
 
-**Impact:** Users adopted the tool faster because they maintained control. The confidence scores helped them quickly identify edge cases requiring human review.
+**Decision 2: Keep Official Data as the Source of Truth**
 
-**Decision 2: Retrieval-Augmented Generation (RAG) to Prevent Hallucination**
-
-Initial versions had Claude confidently suggesting HTS codes that didn't exist - a critical failure for compliance work. I implemented RAG so Claude could only reference actual codes from the official USITC database. This technical constraint became a product feature: users trusted results because they knew the AI couldn't invent codes.
+The app loads official USITC HTS data from CSV at startup and uses those duty rates in responses. Vector search metadata is treated as a secondary copy, so the authoritative dataset always wins.
 
 **Decision 3: Conversational Refinement**
 
-Rather than one-shot classification, I designed a conversational interface where users could refine results: "What if it's plastic instead of metal?" or "These are for commercial use, not residential." This mirrors how specialists naturally work through classifications and made the tool feel collaborative rather than prescriptive.
-
-**Decision 4: Professional Export Reports**
-
-Trade specialists needed documentation for customs filings, not just on-screen results. I added HTML export with duty rates, regulatory notes, and classification reasoning - turning the tool into an end-to-end workflow solution rather than just a lookup utility.
+Rather than a one-shot form, the UI is a chat thread. If the system needs more detail (material, use, processing), it asks a single clarifying question and continues the session.
 
 ### Technical Implementation
 
-**AI Architecture:**
-- **Claude AI (Anthropic Sonnet)** for natural language understanding and reasoning
-- **LangGraph** for managing multi-strategy search workflows
-- **Pinecone vector database** for semantic search across 10,000+ HTS codes
-- **Official USITC data** as the source of truth (no hallucinations)
+**AI & Search Stack:**
+- **OpenAI embeddings** for semantic search (`text-embedding-3-small`)
+- **Pinecone** vector database for nearest-neighbor lookup
+- **Anthropic Claude** for disambiguation when confidence is low
+- **Official USITC data** for duty rates and descriptions
 
 **Search Strategy:**
-I built a three-tier system where Claude chooses the approach based on query quality:
-1. **Fuzzy search** for vague descriptions
-2. **Semantic vector search** for conceptual matches
-3. **Exact lookup** when users provide specific details
-
-The AI decides which strategy (or combination) to use, then validates results against the official database.
+1. Embed the user’s message and query Pinecone (top 5 matches)
+2. **High confidence** → return results immediately
+3. **Low confidence** → one Claude call to either select a candidate or ask a clarifying question
+4. **Max clarifications hit** → show top results for user review
 
 **Key Technical Challenge - Latency:**
-Initial implementations took 8-10 seconds due to Claude processing too much context. I optimized by:
-- Pre-filtering HTS codes to relevant categories before sending to Claude (reduced tokens by 80%)
-- Caching common product classifications
-- Streaming responses so users saw progress rather than waiting
-
-This reduced response time to 2-3 seconds while maintaining accuracy.
+The system minimizes LLM usage by only calling Claude when the vector match is uncertain. This keeps the UI responsive while still offering high-quality disambiguation.
 
 ### Results & Impact
 
 **Quantitative:**
-- ⏱️ **Reduced classification time from 30+ minutes to under 2 minutes** (93% time savings)
-- 🎯 **85%+ accuracy on first suggestion** with confidence scoring identifying when human review needed
-- 📊 **Zero hallucinated codes** after implementing RAG constraints
-- 💰 **15+ hours/week saved** per user (reported by freight forwarder using in production)
+- ⏱️ **Reduced classification time from 30+ minutes to under 2 minutes**
+- 🎯 **High first-pass accuracy** with confidence scores to flag edge cases
+- 💰 **Meaningful time savings** for frequent importers
 
 **Qualitative:**
-- Freight forwarders and customs brokers started using it in production workflows
 - Users reported higher confidence in classifications due to transparent reasoning
 - Small businesses gained access to AI-powered classification without enterprise pricing
-- Open-sourced on GitHub, received feedback from international trade community
-
-**User Feedback:**
-> "This cuts our tariff research time by 75%. The confidence scoring tells us exactly when we need to dig deeper." - Customs Broker, NYC
-
-### What I Learned
-
-**1. AI Products Need Human Trust, Not Just Accuracy**
-
-The confidence scoring feature became more valuable than pure automation. Users didn't want the AI to make decisions for them - they wanted it to make their decision-making faster and more informed. This taught me that successful AI products augment expertise rather than replace it.
-
-**2. Constraints Are Features**
-
-Implementing RAG to prevent hallucination felt like a technical limitation at first, but users saw it as a key differentiator. "The AI can't make up codes" became a selling point. This reinforced that good product design often means intentionally limiting what technology *can* do to ensure what it *does* do is trustworthy.
-
-**3. The Best Problems Come From Direct Observation**
-
-I only understood this problem because I spent months watching specialists work. The insight that this was a "natural language understanding problem disguised as a search problem" came from seeing how they naturally described products vs. how databases were structured. Product intuition comes from being close to the work.
-
-**4. Conversational Interfaces Lower Adoption Barriers**
-
-Users adopted the tool faster because the chat interface felt familiar and forgiving. They could try vague queries, refine them, and explore options without feeling like they needed to learn a new system. For AI products especially, conversational UX reduces friction significantly.
 
 ### What's Next
 
 If I were to continue developing this product, I'd focus on:
 1. **Multi-country support** - expanding beyond US HTS to EU, Canada, China tariff systems
-2. **Historical classification memory** - learning from user refinements to improve future suggestions
-3. **Batch processing** - allowing users to classify entire product catalogs at once
-4. **Integration APIs** - embedding into existing trade management platforms
+2. **Batch processing** - allowing users to classify entire product catalogs at once
+3. **Integration APIs** - embedding into existing trade management platforms
+4. **Audit trails** - storing classification sessions for compliance review
 
 ---
 
@@ -124,10 +87,34 @@ If I were to continue developing this product, I'd focus on:
 ### Quick Start Example
 
 ```bash
-# Clone and run locally
+# Clone the repo
 git clone https://github.com/DavidRod1865/HTS-Classifier
 cd HTS-Classifier
-npm install && npm run dev
+
+# 1) Backend
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Create a .env file with your keys (see Configuration below)
+
+# Build Pinecone index (one-time or when CSV changes)
+python src/embed_and_upload.py
+
+# Start the API
+python app.py
+```
+
+```bash
+# 2) Frontend (new terminal)
+cd frontend
+npm install
+
+# Set VITE_API_URL if your backend is not on :8080
+# Example: export VITE_API_URL=http://localhost:8080
+
+npm run dev
 ```
 
 Example queries to try:
@@ -145,30 +132,29 @@ Below is the complete technical documentation for developers who want to underst
 
 ```
 HTS Oracle
-├── 🎨 Frontend (React + TypeScript)
-│   ├── Modern UI with shadcn/ui components
-│   ├── Progressive disclosure design
-│   ├── Contextual help system
-│   └── Professional export capabilities
+├── 🎨 Frontend (React + Vite + Tailwind)
+│   ├── Chat-based UI with clarifying questions
+│   ├── Result cards with copy + USITC links
+│   └── Session-aware new chat flow
 │
 ├── 🔧 Backend (Python + Flask)
-│   ├── Claude AI integration for analysis
-│   ├── Pinecone vector database for RAG
-│   ├── USITC HTS data processing
-│   └── RESTful API design
+│   ├── /api/chat endpoint (session-based)
+│   ├── OpenAI embeddings + Pinecone search
+│   ├── Claude disambiguation for low-confidence matches
+│   └── CSV-backed duty rates (USITC)
 │
 └── 📊 Data Layer
     ├── Official USITC HTS Schedule (CSV)
-    ├── Vector embeddings for semantic search
-    └── Classification confidence scoring
+    └── Pinecone vector index (hts-codes)
 ```
 
 ### Prerequisites
 
 - **Python 3.8+** with pip
 - **Node.js 18+** with npm
-- **Anthropic API Key** (for Claude AI)
-- **Pinecone API Key** (for vector database)
+- **Anthropic API Key** (Claude)
+- **OpenAI API Key** (Embeddings)
+- **Pinecone API Key** (Vector database)
 
 ### Installation
 
@@ -191,15 +177,11 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys
-
 # Start backend server
 python app.py
 ```
 
-The backend will start on `http://localhost:8000`
+The backend will start on `http://localhost:8080`
 
 **3. Frontend Setup**
 
@@ -209,85 +191,99 @@ cd frontend
 # Install dependencies
 npm install
 
-# Configure environment
-cp .env.example .env.development
-# Edit with your backend URL
-
 # Start development server
 npm run dev
 ```
 
 The frontend will start on `http://localhost:5173`
 
-**4. Initialize HTS Database**
+**4. Build / Refresh the Pinecone Index**
 
 ```bash
-# POST request to setup endpoint
-curl -X POST http://localhost:8000/api/setup-index \
-  -H "Content-Type: application/json" \
-  -d '{"csv_path": "data/hts_2025_revision_13.csv"}'
+cd backend
+python src/embed_and_upload.py
 ```
 
 ### API Reference
 
-#### `POST /api/classify`
-Classify a product and return HTS codes with duty information.
+#### `POST /api/chat`
+
+Chat-based classification endpoint.
 
 **Request:**
 ```json
 {
-  "query": "cotton t-shirts from China"
+  "message": "cotton t-shirts from China",
+  "session_id": "optional-session-id"
 }
 ```
 
-**Response:**
+**Response (classification):**
 ```json
 {
-  "success": true,
-  "type": "final_classification",
-  "message": "Found 3 HTS classifications from USITC HTS schedule",
-  "data": {
-    "results": [{
+  "session_id": "2e3a8f8e-...",
+  "type": "result",
+  "results": [
+    {
       "hts_code": "6109.10.0000",
       "description": "T-shirts, singlets and other vests, knitted or crocheted, of cotton",
       "effective_duty": "16.5%",
+      "special_duty": "Free (AU,BH,CL,CO,D,E,IL,JO,KR,MA,OM,P,PA,PE,S,SG)",
+      "unit": "Dozen",
       "confidence_score": 95,
-      "match_type": "csv_lookup",
+      "chapter": "61",
+      "match_type": "vector_search",
       "duty_source": "usitc"
-    }],
-    "claude_analysis": "Detailed analysis text...",
-    "interpretation": {...}
-  }
+    }
+  ],
+  "analysis": "Brief explanation or null"
+}
+```
+
+**Response (clarifying question):**
+```json
+{
+  "session_id": "2e3a8f8e-...",
+  "type": "question",
+  "question": "Are these t-shirts knitted or woven?"
 }
 ```
 
 #### `GET /api/health`
+
 Health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "environment": "development"
+}
+```
 
 ### Project Structure
 
 ```
 hts-classifier/
-├── backend/                 # Python Flask API
+├── backend/                 # Flask API
 │   ├── app.py              # Main Flask application
-│   ├── src/                # Core modules
-│   │   └── commodity_rag_search.py
-│   ├── requirements.txt    # Python dependencies
-│   └── README.md          # Backend documentation
-│
-├── frontend/               # React TypeScript app
+│   ├── run.py              # Dev runner
 │   ├── src/
-│   │   ├── components/    # Reusable components
-│   │   ├── utils/        # Helper functions
-│   │   └── styles/       # CSS and styling
-│   ├── package.json      # Node.js dependencies
-│   └── README.md         # Frontend documentation
+│   │   ├── embed_and_upload.py
+│   │   └── hts_search.py
+│   └── requirements.txt
 │
-├── data/                  # HTS data files
-│   └── hts_2025_revision_13.csv
+├── frontend/               # React app
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── chat/
+│   │   │   ├── layout/
+│   │   │   └── results/
+│   │   └── App.jsx
+│   └── package.json
 │
-└── docs/                  # Documentation
-    └── implementation/    # Technical guides
+└── data/                   # HTS data files
+    └── hts_2025_revision_13.csv
 ```
 
 ### Configuration
@@ -297,19 +293,23 @@ hts-classifier/
 ```bash
 # Required
 ANTHROPIC_API_KEY=your_claude_api_key
+OPENAI_API_KEY=your_openai_api_key
 PINECONE_API_KEY=your_pinecone_api_key
 
 # Optional
+PINECONE_INDEX_NAME=hts-codes
+CLAUDE_MODEL=claude-sonnet-4-5-20250929
 FLASK_ENV=development
-PORT=8000
-PINECONE_INDEX_NAME=commodity-hts-codes
+PORT=8080
+NETLIFY_URL=https://your-frontend.netlify.app
+FRONTEND_URL=https://your-frontend.netlify.app
 ```
 
 **Frontend Environment Variables:**
 
 ```bash
 # Development
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:8080
 
 # Production
 VITE_API_URL=https://your-api-domain.com
@@ -332,12 +332,11 @@ npm run preview  # Preview production build
 ### Running Tests
 
 ```bash
-# Frontend tests
+# Frontend Playwright tests
 cd frontend
 npm run test
-
-# E2E tests with Playwright
-npm run test:e2e
+npm run test:ui
+npm run test:debug
 ```
 
 ## 🤝 Contributing
@@ -356,6 +355,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **USITC** for providing official HTS schedule data
 - **Anthropic** for Claude AI capabilities
+- **OpenAI** for embedding models
 - **Pinecone** for vector database infrastructure
 
 ## ⚠️ Disclaimer
