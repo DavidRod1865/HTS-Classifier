@@ -37,7 +37,11 @@ const ResultCard = ({ result, isTop }) => {
   };
 
   return (
-    <Card className={isTop ? "border-blue-400 border-2 shadow-md" : "border-gray-200"}>
+    <Card
+      className={`transition-all duration-200 ${
+        isTop ? "border-blue-400 border-2 shadow-md" : "border-gray-200 hover:shadow-md"
+      }`}
+    >
       <CardContent className="p-4">
         {isTop && (
           <Badge className="bg-blue-600 text-white text-xs mb-2">Best Match</Badge>

@@ -10,6 +10,8 @@ const App = () => {
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const bottomRef = useRef(null);
 
   // Auto-scroll to the latest message
@@ -22,6 +24,10 @@ const App = () => {
 
     // Optimistically add user message to the thread
     setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setHistory((prev) => [
+      text,
+      ...prev.filter((item) => item.toLowerCase() !== text.toLowerCase()),
+    ].slice(0, 6));
     setLoading(true);
     setError(null);
 
@@ -65,26 +71,64 @@ const App = () => {
 
   return (
     <MainLayout onNewChat={messages.length > 0 ? newChat : null}>
-      <div className="flex flex-col" style={{ height: "calc(100vh - 180px)" }}>
+      <div className="flex flex-col min-h-[calc(100vh-180px)] md:h-[calc(100vh-180px)]">
         {/* Message thread */}
-        <div className="flex-1 overflow-y-auto space-y-4 pb-4 px-1">
+        <div className="flex-1 overflow-y-auto space-y-4 pb-4 px-1 md:px-2">
           {/* Empty state with example hints */}
           {messages.length === 0 && (
-            <div className="text-center pt-16 px-4">
-              <p className="text-gray-500 text-base">Describe a commodity to classify</p>
+            <div className="text-center pt-10 md:pt-16 px-2 sm:px-4">
+              <p className="text-gray-700 text-base font-medium">
+                Start with a clear product description
+              </p>
+              <p className="text-gray-500 text-sm mt-2">
+                Include material, use, and any key specs (size, form, or process).
+              </p>
               <div className="flex flex-wrap justify-center gap-2 mt-4">
-                {["Cotton t-shirts", "Steel pipes", "LED light bulbs", "Rubber tires"].map(
-                  (hint) => (
-                    <button
-                      key={hint}
-                      onClick={() => sendMessage(hint)}
-                      className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full transition-colors"
-                    >
-                      {hint}
-                    </button>
-                  )
-                )}
+                {[
+                  "100% cotton knitted t-shirts",
+                  "Stainless steel pipes, 2-inch diameter",
+                  "LED light bulbs, 60W equivalent",
+                  "Passenger car rubber tires",
+                ].map((hint) => (
+                  <button
+                    key={hint}
+                    onClick={() => sendMessage(hint)}
+                    className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    {hint}
+                  </button>
+                ))}
               </div>
+            </div>
+          )}
+
+          {history.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Recent Prompts
+                </p>
+                <button
+                  onClick={() => setShowHistory((prev) => !prev)}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  {showHistory ? "Hide" : `Show (${history.length})`}
+                </button>
+              </div>
+              {showHistory && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {history.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => sendMessage(item)}
+                      disabled={loading}
+                      className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -96,7 +140,11 @@ const App = () => {
           {/* Loading indicator */}
           {loading && (
             <div className="flex items-center gap-2 text-gray-500 text-sm">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+              <div className="typing-dots">
+                <span />
+                <span />
+                <span />
+              </div>
               Searching…
             </div>
           )}
