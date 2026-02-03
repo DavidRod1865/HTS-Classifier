@@ -145,6 +145,14 @@ CSV duty data is loaded at startup from `data/hts_2025_revision_13.csv` and is t
 - Do not commit API keys
 - Restrict production CORS via `NETLIFY_URL` / `FRONTEND_URL`
 
+## 🚀 Deployment (Render)
+
+- Create a Render **Web Service** with root directory `backend`
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --preload`
+- Set env vars: `OPENAI_API_KEY`, `PINECONE_API_KEY`, `ANTHROPIC_API_KEY`, plus optional `PINECONE_INDEX_NAME`, `CLAUDE_MODEL`
+- Point `NETLIFY_URL` / `FRONTEND_URL` to your frontend domain
+
 ---
 
 For frontend integration, see [Frontend README](../frontend/README.md).

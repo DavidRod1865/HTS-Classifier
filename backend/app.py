@@ -30,6 +30,8 @@ app = Flask(__name__)
 
 # ── CORS ──────────────────────────────────────────────────────────────
 FLASK_ENV = os.getenv("FLASK_ENV", "development")
+raw_extra_origins = os.getenv("CORS_ORIGINS", "")
+extra_origins = [o.strip() for o in raw_extra_origins.split(",") if o.strip()]
 
 if FLASK_ENV == "development":
     CORS(app, origins=[
@@ -43,6 +45,7 @@ else:
         os.getenv("NETLIFY_URL", ""),
         os.getenv("FRONTEND_URL", ""),
     ] if o]
+    origins.extend(extra_origins)
     origins.append("https://*.netlify.app")
     CORS(app, origins=origins)
 

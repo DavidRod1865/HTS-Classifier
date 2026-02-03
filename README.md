@@ -339,6 +339,12 @@ npm run test:ui
 npm run test:debug
 ```
 
+### Deployment
+
+- **Backend**: Render Web Service (Python) using `gunicorn`
+- **Frontend**: Netlify (Vite build)
+- Full steps: see `DEPLOYMENT.md`
+
 ## 🤝 Contributing
 
 1. Fork the repository

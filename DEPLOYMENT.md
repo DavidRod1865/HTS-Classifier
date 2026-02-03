@@ -1,77 +1,66 @@
 # 🚀 Deployment Guide
 
-This guide covers deploying the HTS Oracle application with a Flask backend on Heroku and a Vite frontend on Netlify.
+This guide covers deploying the HTS Oracle application with a Flask backend on Render and a Vite frontend on Netlify.
 
 ## 📋 Prerequisites
 
-- [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli)
 - [Git](https://git-scm.com/)
+- [Render account](https://render.com/)
 - [Netlify account](https://netlify.com)
-- [Heroku account](https://heroku.com)
 - API keys for:
   - OpenAI (embeddings)
   - Pinecone (vector database)
   - Anthropic (Claude)
 
-## 🔧 Backend Deployment (Heroku)
+## 🔧 Backend Deployment (Render)
 
-### 1. Create Heroku App
+### 1. Create a Render Web Service
 
-```bash
-# Login to Heroku
-heroku login
-
-# Create new app (replace with your preferred name)
-heroku create hts-oracle-backend
-
-# Add Python buildpack
-heroku buildpacks:set heroku/python -a hts-oracle-backend
-```
+1. Go to the Render dashboard → **New** → **Web Service**
+2. Connect your Git repository
+3. Configure service settings:
+   - **Root Directory**: `backend`
+   - **Runtime**: Python
+   - **Build Command**:
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - **Start Command**:
+     ```bash
+     gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --preload
+     ```
 
 ### 2. Set Environment Variables
 
-```bash
-# Required API keys
-heroku config:set OPENAI_API_KEY="your_openai_api_key" -a hts-oracle-backend
-heroku config:set PINECONE_API_KEY="your_pinecone_api_key" -a hts-oracle-backend
-heroku config:set ANTHROPIC_API_KEY="your_anthropic_api_key" -a hts-oracle-backend
+Add the following in Render → Service → **Environment**:
 
-# Environment configuration
-heroku config:set FLASK_ENV="production" -a hts-oracle-backend
-heroku config:set NETLIFY_URL="https://hts-oracle.netlify.app" -a hts-oracle-backend
-heroku config:set FRONTEND_URL="https://hts-oracle.netlify.app" -a hts-oracle-backend
+```
+OPENAI_API_KEY=your_openai_api_key
+PINECONE_API_KEY=your_pinecone_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
 
-# Optional model/index configuration
-heroku config:set PINECONE_INDEX_NAME="hts-codes" -a hts-oracle-backend
-heroku config:set CLAUDE_MODEL="claude-sonnet-4-5-20250929" -a hts-oracle-backend
+FLASK_ENV=production
+NETLIFY_URL=https://your-netlify-site.netlify.app
+FRONTEND_URL=https://your-netlify-site.netlify.app
+
+# Optional extra origins (comma-separated)
+# Example: CORS_ORIGINS=https://htshelper.netlify.app,https://admin.yourdomain.com
+CORS_ORIGINS=
+
+# Optional
+PINECONE_INDEX_NAME=hts-codes
+CLAUDE_MODEL=claude-sonnet-4-5-20250929
 ```
 
-### 3. Deploy Backend
+### 3. Deploy
 
-```bash
-# From the project root directory
-cd backend
-
-# Initialize git (if not already done)
-git init
-git add .
-git commit -m "Initial backend commit"
-
-# Add Heroku remote
-heroku git:remote -a hts-oracle-backend
-
-# Deploy
-git push heroku main
-```
+- Render deploys automatically on push to your repository.
+- You can also trigger a manual deploy from the Render dashboard.
 
 ### 4. Verify Backend Deployment
 
-```bash
-# Check logs
-heroku logs --tail -a hts-oracle-backend
-
-# Test health endpoint
-curl https://hts-oracle-backend.herokuapp.com/api/health
+```
+curl https://your-render-service.onrender.com/api/health
 ```
 
 ## 🎨 Frontend Deployment (Netlify)
@@ -98,12 +87,12 @@ curl https://hts-oracle-backend.herokuapp.com/api/health
 3. **Configure Environment Variables**
    - In Netlify site settings → Environment variables:
    ```
-   VITE_API_URL = https://hts-oracle-backend.herokuapp.com
+   VITE_API_URL = https://hts-classifier-pemj.onrender.com
    ```
 
 4. **Custom Domain (Optional)**
    - In Netlify site settings → Domain management
-   - Add custom domain: `hts-oracle.netlify.app`
+   - Add your custom domain
 
 ### Option B: Manual Deployment
 
@@ -131,7 +120,7 @@ netlify deploy --prod --dir=dist
 
 ### 1. Backend Health Check
 ```bash
-curl https://hts-oracle-backend.herokuapp.com/api/health
+curl https://your-render-service.onrender.com/api/health
 ```
 
 Expected response:
@@ -158,11 +147,8 @@ Expected response:
 ### Common Backend Issues
 
 **App won't start**
-```bash
-heroku logs --tail -a hts-oracle-backend
-```
-- Check for missing environment variables
-- Verify Python version in `runtime.txt` (if present)
+- Check Render → Logs
+- Verify environment variables are set
 - Check `requirements.txt` dependencies
 
 **CORS errors**
@@ -187,14 +173,9 @@ heroku logs --tail -a hts-oracle-backend
 
 ## 📊 Monitoring
 
-### Heroku Monitoring
-```bash
-# View logs
-heroku logs --tail -a hts-oracle-backend
-
-# Check dyno status
-heroku ps -a hts-oracle-backend
-```
+### Render Monitoring
+- View logs in the Render dashboard
+- Check deploy history and health checks
 
 ### Netlify Monitoring
 - Check build logs in Netlify dashboard
@@ -202,37 +183,21 @@ heroku ps -a hts-oracle-backend
 
 ## 🔄 Updates and Maintenance
 
-### Backend Updates
-```bash
-# From backend directory
-git add .
-git commit -m "Update backend"
-git push heroku main
-```
+### Backend Updates (Render)
+- Push to your Git repository
+- Render will automatically rebuild and deploy
 
-### Frontend Updates
+### Frontend Updates (Netlify)
 - Push to your Git repository
 - Netlify will automatically rebuild and deploy
 
 ### Environment Variable Updates
-```bash
-# Heroku
-heroku config:set VARIABLE_NAME="new_value" -a hts-oracle-backend
-
-# Netlify
-# Update via dashboard → Site settings → Environment variables
-```
+- Update Render and Netlify environment variables via their dashboards
 
 ## 📈 Scaling
 
-### Backend Scaling (Heroku)
-```bash
-# Scale up dynos
-heroku ps:scale web=2 -a hts-oracle-backend
-
-# Upgrade dyno type
-heroku ps:type Standard-1X -a hts-oracle-backend
-```
+### Backend Scaling (Render)
+- Scale service plan or instance size in Render dashboard
 
 ### Frontend Scaling (Netlify)
 - Netlify automatically handles CDN distribution
@@ -240,9 +205,9 @@ heroku ps:type Standard-1X -a hts-oracle-backend
 
 ## 💰 Cost Optimization
 
-### Heroku
-- Use Eco dynos for lower cost
-- Consider scaling down during off-hours
+### Render
+- Free tier services may sleep on inactivity
+- Consider paid plans for always-on usage
 
 ### Netlify
 - 100GB bandwidth per month on free tier
@@ -272,11 +237,11 @@ If you encounter issues:
 3. Test API endpoints directly
 4. Review this deployment guide
 5. Check official documentation:
-   - [Heroku Python Documentation](https://devcenter.heroku.com/categories/python-support)
+   - [Render Docs](https://render.com/docs)
    - [Netlify Documentation](https://docs.netlify.com/)
 
 ---
 
 **Deployment URLs (example):**
-- **Backend**: https://hts-oracle-backend.herokuapp.com
+- **Backend**: https://hts-oracle-backend.onrender.com
 - **Frontend**: https://hts-oracle.netlify.app

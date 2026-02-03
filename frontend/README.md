@@ -93,6 +93,12 @@ npm run build
 npm run preview
 ```
 
+## 🚀 Deployment
+
+- **Frontend**: Netlify (Vite build)
+- **Backend**: Render Web Service
+- Set `VITE_API_URL` to your Render backend URL
+
 ## 🔒 Notes
 
 - The UI expects the `/api/chat` response shape (result vs question)
