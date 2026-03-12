@@ -2,12 +2,8 @@
 """
 One-time script: embed HTS leaf nodes and upload to Pinecone.
 
-Run locally whenever the CSV changes:
-    cd backend
-    OPENAI_API_KEY=sk-... PINECONE_API_KEY=pc-... python src/embed_and_upload.py
-
 Creates (or reuses) a Pinecone index named "hts-codes" with 1536-dim vectors
-(OpenAI text-embedding-3-small). Upserts are idempotent by ID, so re-running
+(OpenAI text-embedding-3-small). Upserts are made by ID, so re-running
 is safe and only overwrites changed records.
 """
 
@@ -26,9 +22,13 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 BATCH_SIZE = 100
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "hts_2025_revision_13.csv")
 
-
 def build_text(row):
-    """Text that gets embedded — the only thing that affects search quality."""
+    """Select fields for embedding. Prefers enriched text when available."""
+    enriched = (row.get("Enriched Text") or "").strip()
+    if enriched:
+        context = (row.get("Context Path") or "").strip()
+        return f"{enriched} {context}" if context else enriched
+    # Fallback: original fields
     parts = []
     for field in ("Enhanced Description", "Search Keywords", "Context Path"):
         val = (row.get(field) or "").strip()
@@ -51,12 +51,22 @@ def build_metadata(row):
     }
 
 
-def main():
+def populate_index(csv_path=None):
+    """
+    Embed and upsert all leaf nodes from a CSV into Pinecone.
+
+    Args:
+        csv_path: path to the HTS CSV file (defaults to CSV_PATH)
+
+    Returns:
+        int — number of records uploaded
+    """
+    csv_path = csv_path or CSV_PATH
+
     openai_key = os.getenv("OPENAI_API_KEY")
     pinecone_key = os.getenv("PINECONE_API_KEY")
     if not openai_key or not pinecone_key:
-        print("ERROR: Set OPENAI_API_KEY and PINECONE_API_KEY in your environment.")
-        sys.exit(1)
+        raise RuntimeError("Set OPENAI_API_KEY and PINECONE_API_KEY in your environment.")
 
     client = OpenAI(api_key=openai_key, max_retries=10)
     pc = Pinecone(api_key=pinecone_key)
@@ -79,8 +89,8 @@ def main():
     index = pc.Index(INDEX_NAME)
 
     # Load CSV, keep only leaf nodes with an HTS number
-    print(f"\nLoading {CSV_PATH}...")
-    with open(CSV_PATH, "r", encoding="utf-8") as f:
+    print(f"\nLoading {csv_path}...")
+    with open(csv_path, "r", encoding="utf-8") as f:
         rows = [
             r for r in csv.DictReader(f)
             if (r.get("Is Leaf Node") or "").strip() == "Yes"
@@ -120,6 +130,16 @@ def main():
         print(f"  {uploaded}/{len(rows)} uploaded")
 
     print(f"\nDone. {uploaded} vectors in '{INDEX_NAME}'.")
+    return uploaded
+
+
+def main():
+    load_dotenv()
+    try:
+        populate_index()
+    except RuntimeError as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

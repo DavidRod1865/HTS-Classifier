@@ -26,8 +26,10 @@ logger = logging.getLogger(__name__)
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "hts-codes")
 EMBEDDING_MODEL = "text-embedding-3-small"
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
+CLAUDE_MODEL_LIGHT = os.getenv("CLAUDE_MODEL_LIGHT", "claude-haiku-4-5-20251001")
 
-HIGH_CONFIDENCE = 0.82   # Return directly, no Claude call
+HIGH_CONFIDENCE = 0.82   # Return directly, no Claude call (interactive chat)
+BATCH_CONFIDENCE = 0.75  # More aggressive threshold for batch mode (skip Claude above this)
 MAX_CLARIFICATIONS = 3   # Back-and-forth limit before presenting top results
 
 
@@ -88,7 +90,7 @@ class HTSSearch:
         resp = self.openai.embeddings.create(input=[text], model=EMBEDDING_MODEL)
         return resp.data[0].embedding
 
-    def _search_pinecone(self, embedding, top_k=5):
+    def _search_pinecone(self, embedding, top_k=10):
         return self.index.query(vector=embedding, top_k=top_k, include_metadata=True)
 
     # ── Result formatting ─────────────────────────────────────────────
@@ -121,6 +123,202 @@ class HTSSearch:
             "match_type": "vector_search",
             "duty_source": "usitc",
         }
+
+    # ── CSV reload ──────────────────────────────────────────────────────
+
+    def reload_csv(self):
+        """Re-read the CSV from disk (after an update) and refresh the lookup."""
+        self.hts_lookup = self._load_csv()
+        logger.info(f"CSV reloaded — {len(self.hts_lookup)} leaf nodes")
+
+    # ── Batch-optimised methods (search-first, then one Claude call) ──
+
+    def search_only(self, description):
+        """
+        Embed + Pinecone search only. No Claude call.
+        Returns { results: [...], top_score: float }
+        """
+        embedding = self._embed(description)
+        pinecone_resp = self._search_pinecone(embedding)
+        results = (
+            [self._format_result(m) for m in pinecone_resp.matches]
+            if pinecone_resp.matches else []
+        )
+        top_score = pinecone_resp.matches[0].score if pinecone_resp.matches else 0.0
+        return {"results": results, "top_score": top_score}
+
+    def classify_batch_ambiguous(self, ambiguous_items):
+        """
+        One Haiku call to classify ALL ambiguous items at once.
+
+        Args:
+            ambiguous_items: list of { description, results, top_score, index }
+
+        Returns:
+            dict mapping index → { action, results?, analysis?, question? }
+        """
+        if not ambiguous_items:
+            return {}
+
+        # Build a numbered list of items + their candidates for the prompt
+        items_text = ""
+        for item in ambiguous_items:
+            candidates = "\n".join(
+                f"    - {r['hts_code']}: {r['description']} "
+                f"(Duty: {r['effective_duty']}, Match: {r['confidence_score']}%)"
+                for r in item["results"]
+            )
+            items_text += (
+                f"\nItem {item['index']}. \"{item['description']}\"\n"
+                f"  Candidates (top match: {round(item['top_score'] * 100)}%):\n"
+                f"{candidates}\n"
+            )
+
+        prompt = (
+            "You are an HTS (Harmonized Tariff Schedule) classification assistant.\n\n"
+            "Classify each commodity below. For each item, pick the best HTS code "
+            "from its candidates, or flag it for review if truly ambiguous.\n\n"
+            f"Items to classify:{items_text}\n"
+            "For EACH item, respond with a JSON object containing:\n"
+            '- "action": "classify" or "review"\n'
+            '- "hts_code": the chosen code (if classify)\n'
+            '- "analysis": brief explanation\n\n'
+            "Rules:\n"
+            "- hts_code MUST be one of the candidates listed for that item.\n"
+            "- Prefer classifying over reviewing — only review if truly impossible to decide.\n\n"
+            "Respond with ONLY a JSON array, one object per item, in order:\n"
+            '[{"action": "classify", "hts_code": "XXXX.XX.XXXX", "analysis": "..."}, ...]'
+        )
+
+        response = self.anthropic.messages.create(
+            model=CLAUDE_MODEL_LIGHT,
+            max_tokens=200 * len(ambiguous_items),
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        return self._parse_batch_response(response.content[0].text, ambiguous_items)
+
+    def _parse_batch_response(self, text, ambiguous_items):
+        """Parse Claude's JSON array response for batch classification."""
+        decisions = {}
+        try:
+            match = re.search(r"\[.*\]", text, re.DOTALL)
+            parsed = json.loads(match.group() if match else text)
+            if not isinstance(parsed, list):
+                parsed = []
+        except (json.JSONDecodeError, AttributeError):
+            parsed = []
+
+        for i, item in enumerate(ambiguous_items):
+            idx = item["index"]
+            results = item["results"]
+
+            if i < len(parsed) and parsed[i].get("action") == "classify":
+                decision = parsed[i]
+                target_digits = "".join(c for c in decision.get("hts_code", "") if c.isdigit())
+                matched = [
+                    r for r in results
+                    if "".join(c for c in r["hts_code"] if c.isdigit()) == target_digits
+                ]
+                ordered = matched + [r for r in results if r not in matched]
+                decisions[idx] = {
+                    "type": "result",
+                    "results": ordered[:3],
+                    "analysis": decision.get("analysis", ""),
+                }
+            else:
+                # Fallback or review — return top results
+                analysis = (
+                    parsed[i].get("analysis", "Classification is ambiguous — manual review recommended.")
+                    if i < len(parsed) else "Classification is ambiguous — manual review recommended."
+                )
+                decisions[idx] = {
+                    "type": "needs_review",
+                    "results": results[:3],
+                    "analysis": analysis,
+                }
+
+        return decisions
+
+    # ── Stateless single-turn classification (for batch processing) ───
+
+    def classify_single(self, description):
+        """
+        Classify a single commodity description without session state.
+        Used by the batch invoice pipeline — each item is independent.
+
+        Returns:
+            { type: "result"|"needs_review", results: [...], analysis?: str }
+        """
+        embedding = self._embed(description)
+        pinecone_resp = self._search_pinecone(embedding)
+
+        results = (
+            [self._format_result(m) for m in pinecone_resp.matches]
+            if pinecone_resp.matches else []
+        )
+        top_score = pinecone_resp.matches[0].score if pinecone_resp.matches else 0.0
+
+        # High confidence — return directly
+        if top_score >= HIGH_CONFIDENCE and results:
+            return {"type": "result", "results": results[:3], "analysis": None}
+
+        # Low confidence — ask Claude to classify or flag for review
+        if not results:
+            return {
+                "type": "needs_review",
+                "results": [],
+                "analysis": "No matching HTS codes found for this commodity.",
+            }
+
+        decision = self._ask_claude_single(description, results, top_score)
+
+        if decision["action"] == "classify":
+            return {
+                "type": "result",
+                "results": decision["results"],
+                "analysis": decision.get("analysis"),
+            }
+
+        # Claude wanted to ask a question — in batch mode, flag for review
+        return {
+            "type": "needs_review",
+            "results": results[:3],
+            "analysis": decision.get("question", "Classification is ambiguous — manual review recommended."),
+        }
+
+    def _ask_claude_single(self, description, results, top_score):
+        """Single Claude call for stateless classification (no conversation history)."""
+        candidates_text = "\n".join(
+            f"- {r['hts_code']}: {r['description']} "
+            f"(Duty: {r['effective_duty']}, Match: {r['confidence_score']}%)"
+            for r in results
+        )
+
+        prompt = (
+            "You are an HTS (Harmonized Tariff Schedule) classification assistant.\n\n"
+            f"Commodity to classify: {description}\n\n"
+            f"Vector search candidates (top match confidence: {round(top_score * 100)}%):\n"
+            f"{candidates_text}\n\n"
+            "Decide ONE of two actions:\n"
+            "1. CLASSIFY — if you can confidently identify the correct HTS code.\n"
+            "2. ASK — if you need more information to classify accurately.\n\n"
+            "Rules:\n"
+            "- If CLASSIFY, hts_code MUST be one of the candidates listed above.\n"
+            "- If ASK, describe what additional info would help.\n\n"
+            "Respond with ONLY valid JSON:\n"
+            '{"action": "classify", "hts_code": "XXXX.XX.XXXX", "analysis": "Brief explanation."}\n'
+            "OR\n"
+            '{"action": "ask", "question": "Your clarifying question."}'
+        )
+
+        response = self.anthropic.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        return self._parse_claude_response(response.content[0].text, results)
 
     # ── Main entry point ──────────────────────────────────────────────
 

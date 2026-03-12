@@ -116,6 +116,7 @@ playwright/.cache/
 # Temporary folders
 tmp/
 temp/
+.tmp/
 
 # OS generated files
 .DS_Store
