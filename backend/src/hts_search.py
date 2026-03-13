@@ -16,21 +16,56 @@ import os
 import json
 import re
 import logging
+import hashlib
+import time
 import pandas as pd
 from openai import OpenAI
-from pinecone import Pinecone
+from pinecone import Pinecone, SearchQuery, SearchRerank
 from anthropic import Anthropic
 
 logger = logging.getLogger(__name__)
 
-INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "hts-codes")
-EMBEDDING_MODEL = "text-embedding-3-small"
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
+INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "hts-codes-v2")
+EMBEDDING_MODEL = "text-embedding-3-large"
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 CLAUDE_MODEL_LIGHT = os.getenv("CLAUDE_MODEL_LIGHT", "claude-haiku-4-5-20251001")
 
-HIGH_CONFIDENCE = 0.82   # Return directly, no Claude call (interactive chat)
-BATCH_CONFIDENCE = 0.75  # More aggressive threshold for batch mode (skip Claude above this)
+# Reranking: fetch more candidates, then rerank to top_k
+RERANK_FETCH_K = 30     # How many to fetch from vector search
+RERANK_MODEL = "pinecone-rerank-v0"
+
+# Cache settings
+CACHE_TTL = 3600        # 1 hour
+CACHE_MAX_SIZE = 10000
+
+HIGH_CONFIDENCE = 0.65   # Return directly, no Claude call (interactive chat)
+BATCH_CONFIDENCE = 0.55  # More aggressive threshold for batch mode (skip Claude above this)
 MAX_CLARIFICATIONS = 3   # Back-and-forth limit before presenting top results
+
+
+class TTLCache:
+    """Simple dict-based cache with TTL and max size."""
+
+    def __init__(self, ttl=CACHE_TTL, max_size=CACHE_MAX_SIZE):
+        self._store = {}
+        self._ttl = ttl
+        self._max_size = max_size
+
+    def get(self, key):
+        entry = self._store.get(key)
+        if entry and time.time() - entry["ts"] < self._ttl:
+            return entry["val"]
+        if entry:
+            del self._store[key]
+        return None
+
+    def set(self, key, val):
+        if len(self._store) >= self._max_size:
+            # Evict oldest 10%
+            sorted_keys = sorted(self._store, key=lambda k: self._store[k]["ts"])
+            for k in sorted_keys[: self._max_size // 10]:
+                del self._store[k]
+        self._store[key] = {"val": val, "ts": time.time()}
 
 
 class HTSSearch:
@@ -40,6 +75,8 @@ class HTSSearch:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         self.index = pc.Index(INDEX_NAME)
         self.hts_lookup = self._load_csv()
+        self._embed_cache = TTLCache()
+        self._search_cache = TTLCache()
         logger.info(f"HTSSearch ready — {len(self.hts_lookup)} leaf nodes loaded from CSV")
 
     # ── CSV lookup (loaded once at startup) ──────────────────────────
@@ -51,7 +88,7 @@ class HTSSearch:
         a secondary copy that may lag behind a CSV update.
         """
         csv_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "data", "hts_2025_revision_13.csv"
+            os.path.dirname(__file__), "..", "..", "data", "hts_2026_revision_4_enriched.csv"
         )
         df = pd.read_csv(csv_path, low_memory=False)
         df = df[df["Is Leaf Node"].astype(str).str.strip() == "Yes"].copy()
@@ -86,12 +123,51 @@ class HTSSearch:
 
     # ── Embedding & Pinecone search ───────────────────────────────────
 
-    def _embed(self, text):
-        resp = self.openai.embeddings.create(input=[text], model=EMBEDDING_MODEL)
-        return resp.data[0].embedding
+    @staticmethod
+    def _cache_key(text):
+        return hashlib.sha256(text.encode()).hexdigest()
 
-    def _search_pinecone(self, embedding, top_k=10):
-        return self.index.query(vector=embedding, top_k=top_k, include_metadata=True)
+    def _embed(self, text):
+        key = self._cache_key(text)
+        cached = self._embed_cache.get(key)
+        if cached is not None:
+            return cached
+        resp = self.openai.embeddings.create(input=[text], model=EMBEDDING_MODEL)
+        embedding = resp.data[0].embedding
+        self._embed_cache.set(key, embedding)
+        return embedding
+
+    def _search_pinecone(self, embedding, query_text="", top_k=10):
+        """
+        Search Pinecone with reranking.
+
+        Uses the search() API: fetches RERANK_FETCH_K candidates by vector
+        similarity, then reranks them using the built-in reranker to get
+        the best top_k results.
+
+        Falls back to legacy query() API if search() fails.
+        """
+        try:
+            resp = self.index.search(
+                namespace="",
+                query=SearchQuery(
+                    inputs={},
+                    top_k=RERANK_FETCH_K,
+                    vector={"values": embedding},
+                ),
+                rerank=SearchRerank(
+                    model=RERANK_MODEL,
+                    rank_fields=["description"],
+                    top_n=top_k,
+                    query=query_text,
+                ),
+            )
+            return ("search", resp)
+        except Exception as e:
+            logger.warning(f"search() API failed, falling back to query(): {e}")
+            return ("query", self.index.query(
+                vector=embedding, top_k=top_k, include_metadata=True
+            ))
 
     # ── Result formatting ─────────────────────────────────────────────
 
@@ -103,12 +179,33 @@ class HTSSearch:
             return f"{digits[:4]}.{digits[4:6]}.{digits[6:10]}"
         return str(code)
 
-    def _format_result(self, match):
+    def _extract_matches(self, pinecone_resp):
         """
-        Turn a Pinecone match into the dict the frontend renders.
+        Normalize search() and query() responses into a common list of
+        (score, metadata_dict) tuples.
+        """
+        api_type, resp = pinecone_resp
+
+        if api_type == "query":
+            return [
+                (m.score, m.metadata or {})
+                for m in (resp.matches if resp.matches else [])
+            ]
+
+        # search() API: resp.result.hits
+        hits = resp.result.hits if resp.result and resp.result.hits else []
+        matches = []
+        for hit in hits:
+            score = hit._score if hasattr(hit, "_score") else 0.0
+            fields = hit.fields if hasattr(hit, "fields") else {}
+            matches.append((score, fields or {}))
+        return matches
+
+    def _format_result(self, score, meta):
+        """
+        Turn a (score, metadata) pair into the dict the frontend renders.
         CSV is authoritative for duty rates; Pinecone metadata is fallback.
         """
-        meta = match.metadata
         raw_code = meta.get("hts_code", "")
         csv = self.hts_lookup.get(raw_code, {})
 
@@ -118,7 +215,7 @@ class HTSSearch:
             "effective_duty": csv.get("general_rate") or meta.get("general_rate", ""),
             "special_duty": csv.get("special_rate") or meta.get("special_rate", ""),
             "unit": csv.get("unit") or meta.get("unit", ""),
-            "confidence_score": round(match.score * 100),
+            "confidence_score": round(score * 100),
             "chapter": self._format_hts_code(raw_code)[:2],
             "match_type": "vector_search",
             "duty_source": "usitc",
@@ -138,14 +235,21 @@ class HTSSearch:
         Embed + Pinecone search only. No Claude call.
         Returns { results: [...], top_score: float }
         """
+        # Check search cache
+        cache_key = self._cache_key(description)
+        cached = self._search_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         embedding = self._embed(description)
-        pinecone_resp = self._search_pinecone(embedding)
-        results = (
-            [self._format_result(m) for m in pinecone_resp.matches]
-            if pinecone_resp.matches else []
-        )
-        top_score = pinecone_resp.matches[0].score if pinecone_resp.matches else 0.0
-        return {"results": results, "top_score": top_score}
+        pinecone_resp = self._search_pinecone(embedding, query_text=description)
+        matches = self._extract_matches(pinecone_resp)
+        results = [self._format_result(score, meta) for score, meta in matches]
+        top_score = matches[0][0] if matches else 0.0
+        result = {"results": results, "top_score": top_score}
+
+        self._search_cache.set(cache_key, result)
+        return result
 
     def classify_batch_ambiguous(self, ambiguous_items):
         """
@@ -251,13 +355,10 @@ class HTSSearch:
             { type: "result"|"needs_review", results: [...], analysis?: str }
         """
         embedding = self._embed(description)
-        pinecone_resp = self._search_pinecone(embedding)
-
-        results = (
-            [self._format_result(m) for m in pinecone_resp.matches]
-            if pinecone_resp.matches else []
-        )
-        top_score = pinecone_resp.matches[0].score if pinecone_resp.matches else 0.0
+        pinecone_resp = self._search_pinecone(embedding, query_text=description)
+        matches = self._extract_matches(pinecone_resp)
+        results = [self._format_result(score, meta) for score, meta in matches]
+        top_score = matches[0][0] if matches else 0.0
 
         # High confidence — return directly
         if top_score >= HIGH_CONFIDENCE and results:
@@ -341,13 +442,10 @@ class HTSSearch:
         )
 
         embedding = self._embed(search_text)
-        pinecone_resp = self._search_pinecone(embedding)
-
-        results = (
-            [self._format_result(m) for m in pinecone_resp.matches]
-            if pinecone_resp.matches else []
-        )
-        top_score = pinecone_resp.matches[0].score if pinecone_resp.matches else 0.0
+        pinecone_resp = self._search_pinecone(embedding, query_text=search_text)
+        matches = self._extract_matches(pinecone_resp)
+        results = [self._format_result(score, meta) for score, meta in matches]
+        top_score = matches[0][0] if matches else 0.0
 
         # ── HIGH CONFIDENCE: return directly, zero Claude calls ──────
         if top_score >= HIGH_CONFIDENCE and results:

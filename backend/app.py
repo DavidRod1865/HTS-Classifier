@@ -11,9 +11,12 @@ Sessions expire after SESSION_TTL seconds.
 
 import os
 import sys
+import re
 import uuid
 import time
 import logging
+import threading
+from collections import defaultdict
 from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -50,8 +53,43 @@ else:
         os.getenv("FRONTEND_URL", ""),
     ] if o]
     origins.extend(extra_origins)
-    origins.append("https://*.netlify.app")
+    if not origins:
+        logger.warning("No CORS origins configured for production. Set NETLIFY_URL, FRONTEND_URL, or CORS_ORIGINS.")
     CORS(app, origins=origins)
+
+# ── Security headers ──────────────────────────────────────────────────
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if FLASK_ENV == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+# ── Rate limiting (in-memory, per-IP) ────────────────────────────────
+RATE_LIMIT = 30        # max requests per window
+RATE_WINDOW = 60       # seconds
+_rate_lock = threading.Lock()
+_rate_store = defaultdict(list)
+
+def _check_rate_limit(ip):
+    now = time.time()
+    with _rate_lock:
+        timestamps = _rate_store[ip]
+        _rate_store[ip] = [t for t in timestamps if now - t < RATE_WINDOW]
+        if len(_rate_store[ip]) >= RATE_LIMIT:
+            return False
+        _rate_store[ip].append(now)
+        return True
+
+@app.before_request
+def rate_limit():
+    if request.endpoint == "health":
+        return
+    ip = request.remote_addr or "unknown"
+    if not _check_rate_limit(ip):
+        return jsonify({"error": "Too many requests. Please wait a moment."}), 429
 
 # ── Search engine (initialised once at startup) ──────────────────────
 logger.info("Initializing HTS search engine...")
@@ -61,6 +99,8 @@ logger.info("HTS search engine ready")
 # ── Session Management ─────────────────────────────────────────────────────
 sessions = {}           # session_id  →  { messages, clarification_count, created_at }
 SESSION_TTL = 3600      # seconds
+MAX_MESSAGE_LENGTH = 5000  # characters
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 def _cleanup_sessions():
     """Drop sessions older than SESSION_TTL."""
@@ -81,7 +121,12 @@ def chat():
             return jsonify({"error": "Missing or empty message"}), 400
 
         message = data["message"].strip()
+        if len(message) > MAX_MESSAGE_LENGTH:
+            return jsonify({"error": f"Message too long (max {MAX_MESSAGE_LENGTH} characters)"}), 400
+
         session_id = data.get("session_id")
+        if session_id and not UUID_RE.match(session_id):
+            return jsonify({"error": "Invalid session ID format"}), 400
 
         # Get existing session or create a new one
         if not session_id or session_id not in sessions:
@@ -102,7 +147,7 @@ def chat():
 
     except Exception as e:
         logger.error("Chat error: %s", e, exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An internal error occurred. Please try again."}), 500
 
 
 # ── File size limits ──────────────────────────────────────────────────
@@ -124,6 +169,8 @@ def classify_invoice():
     pdf_bytes = file.read()
     if len(pdf_bytes) > 10 * 1024 * 1024:
         return jsonify({"error": "PDF file too large (max 10 MB)"}), 400
+    if not pdf_bytes[:5] == b"%PDF-":
+        return jsonify({"error": "File does not appear to be a valid PDF"}), 400
 
     filename = file.filename
 
@@ -156,7 +203,7 @@ def classify_invoice():
 
         except Exception as e:
             logger.error("Invoice classification error: %s", e, exc_info=True)
-            yield _sse({"event": "error", "message": str(e)})
+            yield _sse({"event": "error", "message": "An error occurred during invoice processing."})
 
     return Response(
         generate(),
@@ -190,7 +237,7 @@ def generate_report_endpoint():
 
     except Exception as e:
         logger.error("Report generation error: %s", e, exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An error occurred generating the report."}), 500
 
 
 @app.route("/api/update-csv", methods=["POST"])
@@ -212,7 +259,7 @@ def update_csv():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error("CSV update error: %s", e, exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An error occurred updating the CSV."}), 500
 
 
 @app.route("/api/health", methods=["GET"])

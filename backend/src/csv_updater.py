@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 CSV_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "data", "hts_2025_revision_13.csv"
+    os.path.dirname(__file__), "..", "..", "data", "hts_2026_revision_4_enriched.csv"
 )
 
 REQUIRED_COLUMNS = {

@@ -17,10 +17,11 @@ from pinecone import Pinecone, ServerlessSpec
 
 load_dotenv()
 
-INDEX_NAME = "hts-codes"
-EMBEDDING_MODEL = "text-embedding-3-small"
+INDEX_NAME = "hts-codes-v2"
+EMBEDDING_MODEL = "text-embedding-3-large"
+EMBEDDING_DIMS = 3072
 BATCH_SIZE = 100
-CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "hts_2025_revision_13.csv")
+CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "hts_2026_revision_4_enriched.csv")
 
 def build_text(row):
     """Select fields for embedding. Prefers enriched text when available."""
@@ -74,10 +75,10 @@ def populate_index(csv_path=None):
     # Ensure index exists with correct dimensions
     existing = [idx.name for idx in pc.list_indexes()]
     if INDEX_NAME not in existing:
-        print(f"Creating Pinecone index '{INDEX_NAME}' (1536 dims, cosine)...")
+        print(f"Creating Pinecone index '{INDEX_NAME}' ({EMBEDDING_DIMS} dims, cosine)...")
         pc.create_index(
             name=INDEX_NAME,
-            dimension=1536,
+            dimension=EMBEDDING_DIMS,
             metric="cosine",
             spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )

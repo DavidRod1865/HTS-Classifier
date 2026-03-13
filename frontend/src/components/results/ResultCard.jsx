@@ -68,7 +68,7 @@ const ResultCard = ({ result, isTop }) => {
             </Button>
 
             <a
-              href={`https://hts.usitc.gov/search?query=${formatForUSITC(result.hts_code)}`}
+              href={`https://hts.usitc.gov/search?query=${encodeURIComponent(formatForUSITC(result.hts_code))}`}
               target="_blank"
               rel="noopener noreferrer"
             >
