@@ -2,9 +2,13 @@
 """
 One-time script: embed HTS leaf nodes and upload to Pinecone.
 
-Creates (or reuses) a Pinecone index named "hts-codes" with 1536-dim vectors
-(OpenAI text-embedding-3-small). Upserts are made by ID, so re-running
+Creates (or reuses) a Pinecone index named "hts-codes-v2" with 3072-dim vectors
+(OpenAI text-embedding-3-large). Upserts are made by ID, so re-running
 is safe and only overwrites changed records.
+
+NOTE: If re-indexing with a different embedding model, delete the existing
+Pinecone index first — the script reuses an existing index without checking
+its dimensions.
 """
 
 import os
