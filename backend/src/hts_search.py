@@ -151,7 +151,6 @@ class HTSSearch:
             resp = self.index.search(
                 namespace="__default__",
                 query=SearchQuery(
-                    inputs={},
                     top_k=RERANK_FETCH_K,
                     vector={"values": embedding},
                 ),
