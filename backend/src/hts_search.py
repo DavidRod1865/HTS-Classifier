@@ -26,7 +26,7 @@ from anthropic import Anthropic
 logger = logging.getLogger(__name__)
 
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "hts-codes-v2")
-EMBEDDING_MODEL = "text-embedding-3-small"  # index was built with 1536-dim small; change after re-indexing
+EMBEDDING_MODEL = "text-embedding-3-large"  # index was built with 3072-dim large
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 CLAUDE_MODEL_LIGHT = os.getenv("CLAUDE_MODEL_LIGHT", "claude-haiku-4-5-20251001")
 
@@ -149,7 +149,7 @@ class HTSSearch:
         """
         try:
             resp = self.index.search(
-                namespace="",
+                namespace="__default__",
                 query=SearchQuery(
                     inputs={},
                     top_k=RERANK_FETCH_K,
