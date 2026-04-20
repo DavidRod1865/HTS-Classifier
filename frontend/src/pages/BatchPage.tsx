@@ -152,7 +152,7 @@ export function BatchPage() {
         <>
           <UploadZone
             onUpload={handleUpload}
-            isLoading={state.status === "uploading"}
+            isLoading={false}
           />
           {state.error && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive">
