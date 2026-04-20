@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # CORS: which frontend URLs can call our API
     # In dev this is localhost:5173 (Vite). In prod it's your Vercel/Netlify URL.
     # Stored as a comma-separated string so pydantic-settings doesn't try to JSON-parse it.
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = "https://hts-oracle.netlify.app,http://localhost:5173,http://localhost:3000"
 
     @property
     def cors_origin_list(self) -> list[str]:
