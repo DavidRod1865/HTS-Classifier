@@ -13,7 +13,6 @@ Usage:
 
 from functools import lru_cache
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,15 +55,12 @@ class Settings(BaseSettings):
 
     # CORS: which frontend URLs can call our API
     # In dev this is localhost:5173 (Vite). In prod it's your Vercel/Netlify URL.
-    # Accepts JSON array or comma-separated string in env vars.
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # Stored as a comma-separated string so pydantic-settings doesn't try to JSON-parse it.
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: object) -> object:
-        if isinstance(v, str) and not v.startswith("["):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
     # --- pydantic-settings config ---
     # Tells pydantic to read from a .env file and strip whitespace from values

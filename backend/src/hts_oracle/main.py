@@ -94,7 +94,7 @@ def create_app() -> FastAPI:
     # to call our API. Without this, browsers block cross-origin requests.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.cors_origin_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
