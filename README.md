@@ -1,373 +1,150 @@
-# HTS Oracle - AI-Powered Harmonized Tariff Schedule Classifier
+# HTS Oracle
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![React](https://img.shields.io/badge/React-19+-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+AI-powered Harmonized Tariff Schedule classification. Describe a product, get back the correct HTS code and duty rate — instantly.
 
-> AI-powered product classification system that reduces tariff code lookup time from 30+ minutes to under 2 minutes for international trade compliance.
+## How It Works
 
----
+1. User submits a product description (or uploads a PDF invoice)
+2. The backend embeds the query with OpenAI (`text-embedding-3-small`, 1536 dims)
+3. pgvector finds the closest HTS codes by cosine similarity
+4. **High confidence** (≥ 0.65) → results returned directly, zero LLM calls
+5. **Low confidence** → one Claude Haiku call picks the best match
 
-## 🎯 Product Case Study
+~70% of queries resolve at step 4 — no LLM needed.
 
-### The Problem
+## Features
 
-During my time managing international trade operations at Schneider Freight, I watched customs compliance specialists spend 30-45 minutes searching through 10,000+ Harmonized Tariff Schedule (HTS) codes for every product classification. This wasn't just inefficient - a single misclassification could result in thousands of dollars in fines, duty overpayments, or shipment delays.
+- **Single product search** — type a description, get ranked HTS codes with duty rates
+- **Batch PDF classification** — upload an invoice, results streamed in real-time via SSE
+- **Refinement fields** — optional material, intended use, and form inputs to narrow results
+- **Admin dashboard** — database stats and import management
 
-The existing solutions were either:
-- **Manual search** through massive PDF documents (slow, error-prone)
-- **Basic keyword tools** that couldn't understand context (a "desk" could be furniture OR office equipment)
-- **Enterprise software** priced at $10K+/year (inaccessible to small importers)
+## Tech Stack
 
-**The core insight:** This was fundamentally a natural language understanding problem. Specialists needed to match vague product descriptions ("cotton shirts from China") to precise regulatory codes based on material, use, origin, and construction - something keyword search couldn't handle but modern AI could.
+**Backend** — Python 3.11+
+| Component | Technology |
+|-----------|------------|
+| Framework | FastAPI + Uvicorn |
+| Database | PostgreSQL + pgvector (async via SQLAlchemy 2.0 + asyncpg) |
+| Migrations | Alembic |
+| Embeddings | OpenAI `text-embedding-3-small` |
+| LLM | Anthropic Claude Haiku (disambiguation only) |
+| PDF parsing | pdfplumber |
+| Config | pydantic-settings |
+| Logging | structlog |
 
-### Why I Built This
+**Frontend** — Node 20+
+| Component | Technology |
+|-----------|------------|
+| Framework | React 19 + TypeScript 5.6 (strict) |
+| Build | Vite 6 |
+| Styling | Tailwind CSS 4 |
+| Server state | TanStack Query 5 |
+| Routing | React Router 7 |
+| Icons | lucide-react |
 
-When modern LLMs became available with strong reasoning capabilities, I saw an opportunity to solve this with AI-powered semantic search rather than traditional keyword matching. The $500B+ annual US import market meant even small improvements in classification speed and accuracy could have significant impact.
-
-I also had a personal connection - having worked in logistics, I knew small freight forwarders and customs brokers who couldn't afford enterprise solutions but desperately needed better tools.
-
-### Product Strategy & Key Decisions
-
-**Decision 1: Confidence-Based Results, Not Blind Automation**
-
-Trade specialists want transparency. The system returns direct results only when vector search confidence is high; otherwise, it asks a clarifying question or presents multiple options. This preserves user control while still accelerating the workflow.
-
-**Decision 2: Keep Official Data as the Source of Truth**
-
-The app loads official USITC HTS data from CSV at startup and uses those duty rates in responses. Vector search metadata is treated as a secondary copy, so the authoritative dataset always wins.
-
-**Decision 3: Conversational Refinement**
-
-Rather than a one-shot form, the UI is a chat thread. If the system needs more detail (material, use, processing), it asks a single clarifying question and continues the session.
-
-### Technical Implementation
-
-**AI & Search Stack:**
-- **OpenAI embeddings** for semantic search (`text-embedding-3-small`)
-- **Pinecone** vector database for nearest-neighbor lookup
-- **Anthropic Claude** for disambiguation when confidence is low
-- **Official USITC data** for duty rates and descriptions
-
-**Search Strategy:**
-1. Embed the user’s message and query Pinecone (top 5 matches)
-2. **High confidence** → return results immediately
-3. **Low confidence** → one Claude call to either select a candidate or ask a clarifying question
-4. **Max clarifications hit** → show top results for user review
-
-**Key Technical Challenge - Latency:**
-The system minimizes LLM usage by only calling Claude when the vector match is uncertain. This keeps the UI responsive while still offering high-quality disambiguation.
-
-### Results & Impact
-
-**Quantitative:**
-- ⏱️ **Reduced classification time from 30+ minutes to under 2 minutes**
-- 🎯 **High first-pass accuracy** with confidence scores to flag edge cases
-- 💰 **Meaningful time savings** for frequent importers
-
-**Qualitative:**
-- Users reported higher confidence in classifications due to transparent reasoning
-- Small businesses gained access to AI-powered classification without enterprise pricing
-
-### What's Next
-
-If I were to continue developing this product, I'd focus on:
-1. **Multi-country support** - expanding beyond US HTS to EU, Canada, China tariff systems
-2. **Batch processing** - allowing users to classify entire product catalogs at once
-3. **Integration APIs** - embedding into existing trade management platforms
-4. **Audit trails** - storing classification sessions for compliance review
-
----
-
-## 🚀 Try It Yourself
-
-**Live Demo:** [hts-oracle-demo.com](#)  
-**Source Code:** [github.com/DavidRod1865/HTS-Classifier](https://github.com/DavidRod1865/HTS-Classifier)
-
-### Quick Start Example
-
-```bash
-# Clone the repo
-git clone https://github.com/DavidRod1865/HTS-Classifier
-cd HTS-Classifier
-
-# 1) Backend
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Create a .env file with your keys (see Configuration below)
-
-# Build Pinecone index (one-time or when CSV changes)
-python src/embed_and_upload.py
-
-# Start the API
-python app.py
-```
-
-```bash
-# 2) Frontend (new terminal)
-cd frontend
-npm install
-
-# Set VITE_API_URL if your backend is not on :8080
-# Example: export VITE_API_URL=http://localhost:8080
-
-npm run dev
-```
-
-Example queries to try:
-- "Cotton t-shirts manufactured in Vietnam"
-- "Stainless steel pipes for construction, 2-inch diameter"
-- "LED light bulbs, 60-watt equivalent, household use"
-
----
-
-## 📖 Technical Documentation
-
-Below is the complete technical documentation for developers who want to understand the architecture, run it locally, or contribute to the project.
-
-### Architecture Overview
+## Project Structure
 
 ```
-HTS Oracle
-├── 🎨 Frontend (React + Vite + Tailwind)
-│   ├── Chat-based UI with clarifying questions
-│   ├── Result cards with copy + USITC links
-│   └── Session-aware new chat flow
-│
-├── 🔧 Backend (Python + Flask)
-│   ├── /api/chat endpoint (session-based)
-│   ├── OpenAI embeddings + Pinecone search
-│   ├── Claude disambiguation for low-confidence matches
-│   └── CSV-backed duty rates (USITC)
-│
-└── 📊 Data Layer
-    ├── Official USITC HTS Schedule (CSV)
-    └── Pinecone vector index (hts-codes)
+HTS-Classifier/
+├── backend/
+│   └── src/hts_oracle/
+│       ├── main.py            # FastAPI app + middleware
+│       ├── config.py          # Environment config
+│       ├── db.py              # Async SQLAlchemy + pgvector
+│       ├── models/            # HtsCode, Classification, BatchJob
+│       ├── services/          # Embedder, Searcher, Classifier, BatchClassifier, PdfParser
+│       ├── routes/            # health, classify, batch, admin
+│       ├── schemas/           # Pydantic request/response models
+│       └── cli/               # CSV import command
+├── frontend/src/
+│   ├── pages/                 # SearchPage, BatchPage, AdminPage
+│   ├── components/            # Search, Results, Batch, Layout
+│   ├── api/                   # Typed API client + TanStack Query hooks
+│   └── lib/                   # Utilities
+└── data/                      # Official USITC HTS CSV files
 ```
+
+## Getting Started
 
 ### Prerequisites
 
-- **Python 3.8+** with pip
-- **Node.js 18+** with npm
-- **Anthropic API Key** (Claude)
-- **OpenAI API Key** (Embeddings)
-- **Pinecone API Key** (Vector database)
+- Python 3.11+
+- Node 20+
+- PostgreSQL with [pgvector](https://github.com/pgvector/pgvector) extension
 
-### Installation
-
-**1. Clone Repository**
+### Database Setup
 
 ```bash
-git clone https://github.com/DavidRod1865/HTS-Classifier.git
-cd HTS-Classifier
+createdb hts_oracle
+psql hts_oracle -c "CREATE EXTENSION IF NOT EXISTS vector"
 ```
 
-**2. Backend Setup**
+### Backend
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
+pip install -e ".[dev]"
 
-# Install dependencies
-pip install -r requirements.txt
+# Configure environment
+cp .env.example .env.local
+# Edit .env.local with your API keys and DATABASE_URL
 
-# Start backend server
-python app.py
+# Run migrations
+alembic upgrade head
+
+# Import HTS data
+python -m hts_oracle.cli.import_hts ../data/hts_2026_revision_4_enriched.csv
+
+# Start dev server
+uvicorn hts_oracle.main:app --reload --port 8080
 ```
 
-The backend will start on `http://localhost:8080`
-
-**3. Frontend Setup**
+### Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start development server
-npm run dev
+npm run dev    # Starts on :5173, proxies /api → :8080
 ```
 
-The frontend will start on `http://localhost:5173`
+## Environment Variables
 
-**4. Build / Refresh the Pinecone Index**
+### Backend (`.env.local`)
 
-```bash
-cd backend
-python src/embed_and_upload.py
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string (`postgresql+asyncpg://...`) |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for embeddings |
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key for Claude disambiguation |
+| `HIGH_CONFIDENCE_THRESHOLD` | No | Similarity threshold for skipping LLM (default: `0.65`) |
+| `BATCH_CONFIDENCE_THRESHOLD` | No | Threshold for batch mode (default: `0.55`) |
+| `ENVIRONMENT` | No | `development` or `production` |
 
-### API Reference
+### Frontend
 
-#### `POST /api/chat`
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_URL` | Production only | Backend URL (dev uses Vite proxy) |
 
-Chat-based classification endpoint.
+## API Endpoints
 
-**Request:**
-```json
-{
-  "message": "cotton t-shirts from China",
-  "session_id": "optional-session-id"
-}
-```
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/v1/health` | Health check |
+| POST | `/api/v1/classify` | Classify a single product description |
+| POST | `/api/v1/batch/upload` | Upload a PDF for batch classification |
+| GET | `/api/v1/batch/{id}/stream` | SSE stream of batch progress |
+| GET | `/api/v1/admin/stats` | Database statistics |
 
-**Response (classification):**
-```json
-{
-  "session_id": "2e3a8f8e-...",
-  "type": "result",
-  "results": [
-    {
-      "hts_code": "6109.10.0000",
-      "description": "T-shirts, singlets and other vests, knitted or crocheted, of cotton",
-      "effective_duty": "16.5%",
-      "special_duty": "Free (AU,BH,CL,CO,D,E,IL,JO,KR,MA,OM,P,PA,PE,S,SG)",
-      "unit": "Dozen",
-      "confidence_score": 95,
-      "chapter": "61",
-      "match_type": "vector_search",
-      "duty_source": "usitc"
-    }
-  ],
-  "analysis": "Brief explanation or null"
-}
-```
+## Deployment
 
-**Response (clarifying question):**
-```json
-{
-  "session_id": "2e3a8f8e-...",
-  "type": "question",
-  "question": "Are these t-shirts knitted or woven?"
-}
-```
+**Backend** — Render or Railway
 
-#### `GET /api/health`
+The included `Procfile` runs Uvicorn with a 120s keep-alive timeout (required for SSE streaming).
 
-Health check endpoint.
+**Frontend** — Netlify
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "environment": "development"
-}
-```
-
-### Project Structure
-
-```
-hts-classifier/
-├── backend/                 # Flask API
-│   ├── app.py              # Main Flask application
-│   ├── run.py              # Dev runner
-│   ├── src/
-│   │   ├── embed_and_upload.py
-│   │   └── hts_search.py
-│   └── requirements.txt
-│
-├── frontend/               # React app
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── chat/
-│   │   │   ├── layout/
-│   │   │   └── results/
-│   │   └── App.jsx
-│   └── package.json
-│
-└── data/                   # HTS data files
-    └── hts_2025_revision_13.csv
-```
-
-### Configuration
-
-**Backend Environment Variables:**
-
-```bash
-# Required
-ANTHROPIC_API_KEY=your_claude_api_key
-OPENAI_API_KEY=your_openai_api_key
-PINECONE_API_KEY=your_pinecone_api_key
-
-# Optional
-PINECONE_INDEX_NAME=hts-codes
-CLAUDE_MODEL=claude-sonnet-4-5-20250929
-FLASK_ENV=development
-PORT=8080
-NETLIFY_URL=https://your-frontend.netlify.app
-FRONTEND_URL=https://your-frontend.netlify.app
-```
-
-**Frontend Environment Variables:**
-
-```bash
-# Development
-VITE_API_URL=http://localhost:8080
-
-# Production
-VITE_API_URL=https://your-api-domain.com
-```
-
-### Development Commands
-
-```bash
-# Backend development
-cd backend
-python app.py  # Development server with auto-reload
-
-# Frontend development
-cd frontend
-npm run dev    # Vite development server
-npm run build  # Production build
-npm run preview  # Preview production build
-```
-
-### Running Tests
-
-```bash
-# Frontend Playwright tests
-cd frontend
-npm run test
-npm run test:ui
-npm run test:debug
-```
-
-### Deployment
-
-- **Backend**: Render Web Service (Python) using `gunicorn`
-- **Frontend**: Netlify (Vite build)
-- Full steps: see `DEPLOYMENT.md`
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **USITC** for providing official HTS schedule data
-- **Anthropic** for Claude AI capabilities
-- **OpenAI** for embedding models
-- **Pinecone** for vector database infrastructure
-
-## ⚠️ Disclaimer
-
-HTS Oracle provides classifications for reference purposes only. Final HTS classifications should be verified with licensed customs brokers or through official CBP ruling procedures.
-
----
-
-**Built for the international trade community** | [View Portfolio](https://davebuilds.tech) | [LinkedIn](https://linkedin.com/in/david-rodriguez1865)
+The included `netlify.toml` configures SPA routing, asset caching, and security headers. Run `npm run build` to produce the `dist/` output.

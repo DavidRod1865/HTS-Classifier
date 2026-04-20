@@ -1,0 +1,91 @@
+# =============================================================================
+# HTS Oracle v2 — Backend
+# =============================================================================
+# Single config file for the Python backend.
+# Manages: dependencies, build settings, and tool config (pytest, ruff).
+#
+# Install with:  pip install -e ".[dev]"
+# Or with uv:    uv pip install -e ".[dev]"
+# =============================================================================
+
+[project]
+name = "hts-oracle"
+version = "2.0.0"
+description = "AI-powered HTS tariff code classification"
+requires-python = ">=3.11"
+
+# ---------------------------------------------------------------------------
+# Dependencies — grouped by purpose
+# ---------------------------------------------------------------------------
+dependencies = [
+    # --- Web framework ---
+    # FastAPI: async framework with automatic OpenAPI spec generation
+    # Uvicorn: ASGI server that runs the FastAPI app
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+
+    # --- Database ---
+    # SQLAlchemy 2.0 async for Postgres
+    # asyncpg: async Postgres driver (faster than psycopg2 for async)
+    # pgvector: vector column type + similarity search for SQLAlchemy
+    # Alembic: database migrations
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "pgvector>=0.3.0",
+    "alembic>=1.14.0",
+
+    # --- AI / ML ---
+    # OpenAI: text-embedding-3-small (1536-dim vectors)
+    # Anthropic: Claude for disambiguation when vector search isn't confident
+    "openai>=1.50.0",
+    "anthropic>=0.40.0",
+
+    # --- PDF processing ---
+    # pdfplumber: extracts text from PDF invoices
+    # weasyprint: generates PDF reports (full Unicode — replaces fpdf2)
+    "pdfplumber>=0.11.0",
+    "weasyprint>=62.0",
+
+    # --- Config + Logging ---
+    # pydantic-settings: validates all env vars at startup (fail fast)
+    # structlog: structured JSON logging with consistent fields
+    "pydantic-settings>=2.6.0",
+    "structlog>=24.0.0",
+
+    # --- Utilities ---
+    "python-multipart>=0.0.12",   # File uploads in FastAPI
+    "httpx>=0.27.0",              # Async HTTP client
+]
+
+# Dev-only dependencies
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+    "httpx>=0.27.0",
+]
+
+# ---------------------------------------------------------------------------
+# Build system
+# ---------------------------------------------------------------------------
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hts_oracle"]
+
+# ---------------------------------------------------------------------------
+# Tool config
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
