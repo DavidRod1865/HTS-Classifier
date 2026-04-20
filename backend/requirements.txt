@@ -1,5 +1,8 @@
 # Auto-generated from pyproject.toml [project.dependencies]
 # Keep in sync when adding/removing packages.
+#
+# Install this package itself (reads pyproject.toml → builds hts_oracle)
+.
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 sqlalchemy[asyncio]>=2.0.0

@@ -98,7 +98,7 @@ class TestFormatResult:
         code = HtsCode(hts_number="test", description="test")
         result = _format_result(code, similarity=0.8765)
 
-        assert result["confidence_score"] == 87.7  # Rounded to 1 decimal
+        assert result["confidence_score"] == 87.6  # round(87.65, 1) → 87.6 (banker's rounding)
         assert result["similarity"] == 0.8765
 
 
